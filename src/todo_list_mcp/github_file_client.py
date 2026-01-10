@@ -11,7 +11,7 @@ from __future__ import annotations
 import base64
 import os
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import httpx
 from loguru import logger
@@ -140,6 +140,87 @@ class GitHubFileClient:
             content=decoded_content,
             download_url=response.get("download_url"),
         )
+
+    def read_directory_files(
+        self,
+        directory: str,
+        *,
+        branch: Optional[str] = None,
+    ) -> List[FileContent]:
+        branch_name = branch or self.default_branch
+        normalized_dir = directory.strip("/")
+        expression = (
+            f"{branch_name}:{normalized_dir}" if normalized_dir else f"{branch_name}:"
+        )
+
+        data = self._graphql_query(
+            query=(
+                """
+                query ($owner: String!, $repo: String!, $expr: String!) {
+                  repository(owner: $owner, name: $repo) {
+                    object(expression: $expr) {
+                      ... on Tree {
+                        entries {
+                          name
+                          path
+                          type
+                          object {
+                            ... on Blob {
+                              oid
+                              text
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+                """
+            ),
+            variables={
+                "owner": self.owner,
+                "repo": self.repo,
+                "expr": expression,
+            },
+        )
+
+        repository = data.get("repository") or {}
+        tree = repository.get("object") or {}
+        entries = tree.get("entries")
+        if entries is None:
+            raise RuntimeError(f"Path is not a directory: {directory}")
+
+        files: List[FileContent] = []
+        for entry in entries:
+            if entry.get("type") != "blob":
+                continue
+            blob = entry.get("object") or {}
+            text_content = blob.get("text")
+            if text_content is None:
+                continue
+            file_path = entry.get("path", "")
+            files.append(
+                FileContent(
+                    path=file_path,
+                    sha=blob.get("oid", ""),
+                    content=text_content,
+                    download_url=self._raw_download_url(file_path, branch_name),
+                )
+            )
+
+        logger.info(
+            "Read directory files",
+            extra={
+                "action": "read_directory",
+                "directory": directory,
+                "branch": branch_name,
+                "owner": self.owner,
+                "repo": self.repo,
+                "file_count": len(files),
+            },
+        )
+
+        return files
 
     def update_file(
         self,
@@ -389,6 +470,67 @@ class GitHubFileClient:
             )
             raise RuntimeError(f"GitHub API request failed for {url}: {exc}") from exc
 
+    def _graphql_query(
+        self,
+        *,
+        query: str,
+        variables: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        try:
+            response = self._client.post(
+                "/graphql", json={"query": query, "variables": variables}
+            )
+            response.raise_for_status()
+            payload = response.json()
+            if payload.get("errors"):
+                logger.error(
+                    "GitHub GraphQL reported errors",
+                    extra={
+                        "owner": self.owner,
+                        "repo": self.repo,
+                        "errors": payload.get("errors"),
+                    },
+                )
+                raise RuntimeError(f"GitHub GraphQL errors: {payload['errors']}")
+            logger.debug(
+                "GitHub GraphQL request succeeded",
+                extra={
+                    "owner": self.owner,
+                    "repo": self.repo,
+                    "status": response.status_code,
+                },
+            )
+            return payload.get("data", {})
+        except httpx.HTTPStatusError as exc:
+            status_code = exc.response.status_code
+            detail = exc.response.text
+            logger.error(
+                "GitHub GraphQL status error",
+                extra={
+                    "owner": self.owner,
+                    "repo": self.repo,
+                    "status": status_code,
+                    "detail": detail,
+                },
+            )
+            raise RuntimeError(
+                f"GitHub GraphQL request failed ({status_code}): {detail}"
+            ) from exc
+        except httpx.HTTPError as exc:
+            logger.error(
+                "GitHub GraphQL transport error",
+                extra={
+                    "owner": self.owner,
+                    "repo": self.repo,
+                    "error": str(exc),
+                },
+            )
+            raise RuntimeError(f"GitHub GraphQL request failed: {exc}") from exc
+
+    def _raw_download_url(self, path: str, branch: str) -> str:
+        normalized_path = path.lstrip("/")
+        return f"https://raw.githubusercontent.com/{self.owner}/{self.repo}/{branch}/{normalized_path}"
+
 
 ## Example usage (for testing purposes)
 if __name__ == "__main__":
@@ -407,9 +549,9 @@ if __name__ == "__main__":
     task_id = str(uuid.uuid4())
 
     with GitHubFileClient(
-        owner=get_settings().github_repo_owner, 
-        repo=get_settings().github_repo_name, 
-        token=get_settings().github_api_token
+        owner=get_settings().github_repo_owner,
+        repo=get_settings().github_repo_name,
+        token=get_settings().github_api_token,
     ) as client:
         task_path = f"task_{task_id}.md"
         archive_path = f"archive/task_{task_id}.md"
@@ -425,3 +567,8 @@ if __name__ == "__main__":
 
         moved = client.move_file(task_path, archive_path)
         print(f"Moved to: {moved.path} @ {moved.sha[:8]}")
+
+        archive_files = client.read_directory_files("archive")
+        print("Archive directory contents:")
+        for file_content in archive_files:
+            print(f"- {file_content.path} @ {file_content.sha[:8]} @ {file_content.content[:20]}")
