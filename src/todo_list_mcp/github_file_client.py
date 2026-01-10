@@ -788,44 +788,68 @@ class GitHubFileClient:
         if not tree_entries:
             raise ValueError("Tree entries are required to create a commit")
 
-        ref = self._request(
-            "GET", f"/repos/{self.owner}/{self.repo}/git/ref/heads/{branch}"
-        )
-        base_commit_sha = (ref.get("object") or {}).get("sha")
-        if not base_commit_sha:
-            raise RuntimeError(f"Unable to resolve base commit for branch {branch}")
+        def _commit_against_head(head_sha: str) -> str:
+            base_commit = self._request(
+                "GET", f"/repos/{self.owner}/{self.repo}/git/commits/{head_sha}"
+            )
+            base_tree_sha = (base_commit.get("tree") or {}).get("sha")
+            if not base_tree_sha:
+                raise RuntimeError(f"Unable to resolve base tree for branch {branch}")
 
-        base_commit = self._request(
-            "GET", f"/repos/{self.owner}/{self.repo}/git/commits/{base_commit_sha}"
-        )
-        base_tree_sha = (base_commit.get("tree") or {}).get("sha")
-        if not base_tree_sha:
-            raise RuntimeError(f"Unable to resolve base tree for branch {branch}")
+            tree = self._request(
+                "POST",
+                f"/repos/{self.owner}/{self.repo}/git/trees",
+                json={"base_tree": base_tree_sha, "tree": tree_entries},
+            )
 
-        tree = self._request(
-            "POST",
-            f"/repos/{self.owner}/{self.repo}/git/trees",
-            json={"base_tree": base_tree_sha, "tree": tree_entries},
-        )
+            commit = self._request(
+                "POST",
+                f"/repos/{self.owner}/{self.repo}/git/commits",
+                json={
+                    "message": message,
+                    "tree": tree.get("sha"),
+                    "parents": [head_sha],
+                },
+            )
 
-        commit = self._request(
-            "POST",
-            f"/repos/{self.owner}/{self.repo}/git/commits",
-            json={
-                "message": message,
-                "tree": tree.get("sha"),
-                "parents": [base_commit_sha],
-            },
-        )
+            commit_sha = commit.get("sha", "")
+            self._request(
+                "PATCH",
+                f"/repos/{self.owner}/{self.repo}/git/refs/heads/{branch}",
+                json={"sha": commit_sha},
+            )
+            return commit_sha
 
-        commit_sha = commit.get("sha", "")
-        self._request(
-            "PATCH",
-            f"/repos/{self.owner}/{self.repo}/git/refs/heads/{branch}",
-            json={"sha": commit_sha},
-        )
+        def _head_sha() -> str:
+            ref = self._request(
+                "GET", f"/repos/{self.owner}/{self.repo}/git/ref/heads/{branch}"
+            )
+            head = (ref.get("object") or {}).get("sha")
+            if not head:
+                raise RuntimeError(f"Unable to resolve base commit for branch {branch}")
+            return head
 
-        return commit_sha
+        attempts = 0
+        last_error: Optional[Exception] = None
+        while attempts < 2:
+            attempts += 1
+            head_sha = _head_sha()
+            try:
+                return _commit_against_head(head_sha)
+            except RuntimeError as exc:
+                last_error = exc
+                detail = str(exc).lower()
+                if "fast forward" in detail and attempts < 2:
+                    logger.info(
+                        "Ref out-of-date; retrying commit with latest head",
+                        extra={"branch": branch, "attempt": attempts},
+                    )
+                    continue
+                raise
+        # Should not reach here; surface last error for clarity.
+        if last_error:
+            raise last_error
+        raise RuntimeError("Failed to commit tree for unknown reasons")
 
     @staticmethod
     def _normalize_kv_pairs(

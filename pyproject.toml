@@ -33,5 +33,10 @@ dev = [
 [tool.uv]
 package = true
 
-# [project.scripts]
-# todo-list-mcp = "todo_list_mcp.mcp_server:app"
+[project.scripts]
+todo-list-mcp = "todo_list_mcp.mcp_server:main"
+
+[tool.pytest.ini_options]
+markers = [
+    "e2e: mark a test as end-to-end test.",
+]
