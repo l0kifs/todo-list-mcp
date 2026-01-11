@@ -14,6 +14,36 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 import httpx
 from loguru import logger
+from pydantic import BaseModel, Field, field_validator, model_validator
+
+
+class GitHubFileClientSettings(BaseModel):
+    """Settings for GitHubFileClient."""
+
+    owner: str = Field("", description="GitHub repository owner")
+    repo: str = Field("", description="GitHub repository name")
+    token: str = Field("", description="GitHub API token")
+    default_branch: str = Field("main", description="Default branch name")
+    base_url: str = Field("https://api.github.com", description="GitHub API base URL")
+    timeout_seconds: float = Field(15.0, description="HTTP client timeout in seconds")
+    user_agent: str = Field("todo-list-mcp-github-file-client/0.1", description="User-Agent header for HTTP requests")
+
+    @field_validator("token")
+    @classmethod
+    def validate_github_token(cls, v: str | None) -> str | None:
+        if not v:
+            raise ValueError(
+                "GitHub token is required"
+            )
+        return v
+
+    @model_validator(mode="after")
+    def validate_github_repo_info(self) -> "GitHubFileClientSettings":
+        if not self.owner or not self.repo:
+            raise ValueError(
+                "Both owner and repo are required in settings"
+            )
+        return self
 
 
 @dataclass(frozen=True)
@@ -27,44 +57,30 @@ class FileContent:
 class GitHubFileClient:
     def __init__(
         self,
-        owner: str,
-        repo: str,
-        token: Optional[str] = None,
-        *,
-        default_branch: str = "main",
-        base_url: str = "https://api.github.com",
-        timeout_seconds: float = 15.0,
-        user_agent: str = "todo-list-mcp-github-file-client/0.1",
+        settings: "GitHubFileClientSettings",
     ) -> None:
-        token_to_use = token
-        if not token_to_use:
-            raise ValueError("GitHub token is required; set GITHUB_TOKEN or pass token")
-
-        if not owner or not repo:
-            raise ValueError("Both owner and repo are required")
-
-        self.owner = owner
-        self.repo = repo
-        self.default_branch = default_branch
+        self.owner = settings.owner
+        self.repo = settings.repo
+        self.default_branch = settings.default_branch
         self._client = httpx.Client(
-            base_url=base_url,
-            timeout=timeout_seconds,
+            base_url=settings.base_url,
+            timeout=settings.timeout_seconds,
             headers={
-                "Authorization": f"Bearer {token_to_use}",
+                "Authorization": f"Bearer {settings.token}",
                 "Accept": "application/vnd.github+json",
                 "X-GitHub-Api-Version": "2022-11-28",
-                "User-Agent": user_agent,
+                "User-Agent": settings.user_agent,
             },
         )
 
         logger.info(
             "Initialized GitHubFileClient",
             extra={
-                "owner": owner,
-                "repo": repo,
-                "default_branch": default_branch,
-                "base_url": base_url,
-                "timeout_seconds": timeout_seconds,
+                "owner": self.owner,
+                "repo": self.repo,
+                "default_branch": self.default_branch,
+                "base_url": settings.base_url,
+                "timeout_seconds": settings.timeout_seconds,
             },
         )
 
@@ -878,11 +894,7 @@ if __name__ == "__main__":
         level="DEBUG",
     )
 
-    with GitHubFileClient(
-        owner=get_settings().github_repo_owner,
-        repo=get_settings().github_repo_name,
-        token=get_settings().github_api_token,
-    ) as client:
+    with GitHubFileClient(settings=get_settings().github_file_client_settings) as client:
         task_id = str(uuid.uuid4())
         task_path = f"task_{task_id}.md"
         archive_path = f"archive/task_{task_id}.md"

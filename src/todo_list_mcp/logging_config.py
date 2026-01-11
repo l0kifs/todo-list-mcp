@@ -1,4 +1,5 @@
 import sys
+from pathlib import Path
 
 from loguru import logger
 
@@ -22,6 +23,20 @@ def setup_logging(settings: Settings) -> None:
         backtrace=True,
         diagnose=True,
         enqueue=True,
+        catch=True,
+    )
+
+    # File handler - for persistent logs
+    logger.add(
+        Path(settings.app_data_dir) / "logs" / "app.log",
+        level=settings.logging_level,
+        rotation=settings.logging_rotation,
+        retention=settings.logging_retention,
+        compression=settings.logging_compression,
+        serialize=True,
+        enqueue=True,
+        backtrace=True,
+        diagnose=True,
         catch=True,
     )
 

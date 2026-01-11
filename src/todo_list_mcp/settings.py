@@ -3,6 +3,8 @@ from pathlib import Path
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from todo_list_mcp.github_file_client import GitHubFileClientSettings
+
 APP_NAME = "todo-list-mcp"  # Application name constant. Should be in format "kebab-case".
 
 
@@ -24,6 +26,11 @@ class Settings(BaseSettings):
         description="Data directory path",
     )
 
+    github_file_client_settings: GitHubFileClientSettings = Field(
+        default_factory=lambda: GitHubFileClientSettings(),  # type: ignore
+        description="Settings for GitHub file client",
+    )
+
     # Logging settings
     logging_level: str = Field(
         default="DEBUG", description="Logging level (e.g., DEBUG, INFO, WARNING, ERROR)"
@@ -32,16 +39,14 @@ class Settings(BaseSettings):
         default="<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | <level>{level: <8}</level> | <cyan>{module}</cyan>:<cyan>{line}</cyan> - <level>{message}</level> | {extra}",
         description="Logging format string",
     )
-
-    # GitHub settings
-    github_repo_owner: str = Field(
-        default="mcp-github-user", description="GitHub repository owner"
+    logging_rotation: str = Field(
+        default="10 MB", description="Log file rotation size"
     )
-    github_repo_name: str = Field(
-        default="todo-list-mcp", description="GitHub repository name"
+    logging_retention: str = Field(
+        default="10 days", description="Log file retention period"
     )
-    github_api_token: str | None = Field(
-        default=None, description="GitHub API token for authentication"
+    logging_compression: str = Field(
+        default="zip", description="Log file compression method"
     )
 
 

@@ -169,13 +169,9 @@ def _task_path(filename: str) -> str:
 settings = get_settings()
 setup_logging(settings)
 
-client = GitHubFileClient(
-    owner=settings.github_repo_owner,
-    repo=settings.github_repo_name,
-    token=settings.github_api_token,
-)
+client = GitHubFileClient(settings=settings.github_file_client_settings)
 
-app = FastMCP("todo-list-mcp")
+app = FastMCP(name=settings.app_name, version=settings.app_version)
 
 
 # ---------------------------------------------------------------------------

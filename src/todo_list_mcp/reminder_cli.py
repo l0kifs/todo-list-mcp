@@ -22,12 +22,21 @@ from loguru import logger
 from rich.console import Console
 from rich.table import Table
 
+from todo_list_mcp.logging_config import setup_logging
 from todo_list_mcp.reminder_client import ReminderClient
+from todo_list_mcp.settings import get_settings
 from todo_list_mcp.sound_client import SoundClient
 
-# Constants
-REMINDERS_FILE = Path.home() / ".reminder_daemon" / "reminders.json"
-PID_FILE = Path.home() / ".reminder_daemon" / "daemon.pid"
+# Get settings
+settings = get_settings()
+
+# Setup logging
+setup_logging(settings)
+
+# Constants derived from settings
+APP_DATA_DIR = Path(settings.app_data_dir)
+REMINDERS_FILE = APP_DATA_DIR / "reminder_daemon" / "reminders.json"
+PID_FILE = APP_DATA_DIR / "reminder_daemon" / "daemon.pid"
 console = Console()
 app = typer.Typer(help="Reminder daemon - persistent reminder service")
 
