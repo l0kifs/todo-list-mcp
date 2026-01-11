@@ -35,6 +35,7 @@ package = true
 
 [project.scripts]
 todo-list-mcp = "todo_list_mcp.mcp_server:main"
+reminder-daemon = "todo_list_mcp.reminder_cli:app"
 
 [tool.pytest.ini_options]
 markers = [

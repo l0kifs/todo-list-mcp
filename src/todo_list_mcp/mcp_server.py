@@ -1,14 +1,16 @@
 """Todo List MCP server single-file entrypoint.
 
 Provides create/read/update/archive/list operations over YAML tasks stored in
-GitHub under the tasks/ directory. Archives move files into archive/. Also
-launches a lightweight reminder sidecar that uses the existing reminder_client
-and sound_client to show desktop reminders and optional beeps for reminder
-timestamps recorded on tasks.
+GitHub under the tasks/ directory. Archives move files into archive/.
+
+Reminder management is handled via the standalone reminder_cli daemon,
+which is automatically started when the MCP server starts (if not already running).
 """
 
 from __future__ import annotations
 
+import subprocess
+import sys
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
@@ -21,7 +23,6 @@ from pydantic import BaseModel, Field, ValidationError, root_validator
 
 from todo_list_mcp.github_file_client import GitHubFileClient
 from todo_list_mcp.logging_config import setup_logging
-from todo_list_mcp.reminder_sidecar import ReminderSidecar
 from todo_list_mcp.settings import get_settings
 
 # ---------------------------------------------------------------------------
@@ -174,8 +175,6 @@ client = GitHubFileClient(
     token=settings.github_api_token,
 )
 
-sidecar = ReminderSidecar()
-
 app = FastMCP("todo-list-mcp")
 
 
@@ -213,7 +212,6 @@ def create_tasks(body: CreateTaskRequest) -> dict:
         content = _serialize_task(task)
         file_pairs.append((full_path, content))
         outputs.append({"filename": full_path, "task": task.dict()})
-        sidecar.schedule_from_task(full_path, task)
     created = client.create_files(file_pairs)
     return {"created": [c.path for c in created]}
 
@@ -261,7 +259,6 @@ def update_tasks(body: UpdateTaskRequest) -> dict:
         content = _serialize_task(task_obj)
         client.update_file(filename, content, sha=existing.sha)
         updated_paths.append(filename)
-        sidecar.schedule_from_task(filename, task_obj)
     return {"updated": updated_paths}
 
 
@@ -369,6 +366,161 @@ def list_tasks(body: ListTaskRequest) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Reminder management tools (communicate with reminder_cli daemon)
+
+
+class SetRemindersRequest(BaseModel):
+    reminders: List[dict] = Field(
+        description="List of reminders to set. Each reminder should have 'title', 'message', and 'due_at' (ISO 8601 format)"
+    )
+
+
+class RemoveRemindersRequest(BaseModel):
+    ids: List[str] = Field(
+        default_factory=list, description="List of reminder IDs to remove"
+    )
+    all: bool = Field(
+        False, description="If true, remove all reminders (ignores 'ids' field)"
+    )
+
+
+def _run_reminder_cli(args: List[str]) -> tuple[str, int]:
+    """Run the reminder CLI command and return (output, exit_code)."""
+    try:
+        result = subprocess.run(
+            [sys.executable, "-m", "todo_list_mcp.reminder_cli"] + args,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        return result.stdout + result.stderr, result.returncode
+    except subprocess.TimeoutExpired:
+        return "Command timed out", 1
+    except Exception as e:
+        return f"Error running command: {e}", 1
+
+
+def _ensure_daemon_running() -> None:
+    """Ensure reminder daemon is running. Start it if not already running."""
+    # Check daemon status
+    output, code = _run_reminder_cli(["status"])
+
+    if code == 0:
+        # Daemon is already running
+        logger.info("Reminder daemon is already running")
+        return
+
+    # Start the daemon in background
+    logger.info("Starting reminder daemon...")
+    try:
+        subprocess.Popen(
+            [sys.executable, "-m", "todo_list_mcp.reminder_cli", "daemon"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,  # Detach from parent process
+        )
+        # Give it a moment to start
+        import time
+
+        time.sleep(0.5)
+
+        # Verify it started
+        output, code = _run_reminder_cli(["status"])
+        if code == 0:
+            logger.info("Reminder daemon started successfully")
+        else:
+            logger.warning("Reminder daemon may not have started properly")
+    except Exception as e:
+        logger.error(f"Failed to start reminder daemon: {e}")
+
+
+@app.tool()
+def set_reminders(body: SetRemindersRequest) -> dict:
+    """Set one or more reminders via the reminder daemon.
+
+    Each reminder must specify a title, message, and due_at timestamp in ISO 8601 format.
+    The reminders will be stored persistently and delivered by the reminder daemon.
+
+    Example: Set a single reminder:
+    {"reminders": [{"title": "Meeting", "message": "Team standup", "due_at": "2026-01-15T10:00:00Z"}]}
+
+    Example: Set multiple reminders:
+    {"reminders": [
+        {"title": "Call", "message": "Phone client", "due_at": "2026-01-15T14:00:00Z"},
+        {"title": "Break", "message": "Time for a break", "due_at": "2026-01-15T15:00:00Z"}
+    ]}
+    """
+    results = []
+    for reminder in body.reminders:
+        title = reminder.get("title", "Reminder")
+        message = reminder.get("message", "")
+        due_at = reminder.get("due_at", "")
+
+        if not due_at:
+            results.append({"error": "Missing due_at timestamp", "reminder": reminder})
+            continue
+
+        output, code = _run_reminder_cli(["add", title, message, due_at])
+        if code == 0:
+            # Extract ID from output if possible
+            reminder_id = "unknown"
+            for line in output.split("\n"):
+                if "Reminder added:" in line:
+                    parts = line.split(":")
+                    if len(parts) > 1:
+                        reminder_id = parts[-1].strip()
+            results.append({"status": "added", "id": reminder_id})
+        else:
+            results.append({"error": output, "reminder": reminder})
+
+    return {"results": results}
+
+
+@app.tool()
+def list_reminders() -> dict:
+    """List all reminders stored in the reminder daemon.
+
+    Returns a list of all pending and due reminders with their details including
+    ID, title, message, due time, and current status.
+
+    Example: {}
+    """
+    output, code = _run_reminder_cli(["list"])
+    if code != 0:
+        return {"error": output}
+
+    # Parse the output - for simplicity, return raw output
+    # In production, you might want to parse the table format
+    return {"output": output, "status": "success"}
+
+
+@app.tool()
+def remove_reminders(body: RemoveRemindersRequest) -> dict:
+    """Remove one or more reminders from the reminder daemon.
+
+    You can either specify specific reminder IDs to remove, or use the 'all' flag
+    to remove all reminders at once.
+
+    Example: Remove specific reminders:
+    {"ids": ["abc123", "def456"]}
+
+    Example: Remove all reminders:
+    {"all": true}
+    """
+    if body.all:
+        output, code = _run_reminder_cli(["remove", "--all"])
+    elif body.ids:
+        output, code = _run_reminder_cli(["remove"] + body.ids)
+    else:
+        return {"error": "Must specify either 'ids' or set 'all' to true"}
+
+    if code == 0:
+        return {"status": "success", "output": output}
+    else:
+        return {"error": output}
+
+
+# ---------------------------------------------------------------------------
 # Serialization
 
 
@@ -391,32 +543,9 @@ def _serialize_task(task: TaskPayload) -> str:
     return yaml.safe_dump(ordered, sort_keys=False, allow_unicode=False)
 
 
-# ---------------------------------------------------------------------------
-# Startup: preload reminders from existing tasks
-
-
-def _bootstrap_reminders() -> None:
-    try:
-        files = client.read_directory_files("tasks")
-    except Exception as exc:
-        detail = str(exc)
-        if "not a directory" in detail.lower() or "not found" in detail.lower():
-            logger.info("tasks/ directory missing; skipping reminder bootstrap")
-            return
-        logger.warning("Could not bootstrap reminders", error=detail)
-        return
-    for f in files:
-        try:
-            data = yaml.safe_load(f.content) or {}
-            task = TaskPayload(**data)
-        except Exception:
-            continue
-        sidecar.schedule_from_task(f.path, task)
-
-
 def main() -> None:
     logger.info("Starting todo-list MCP server")
-    _bootstrap_reminders()
+    _ensure_daemon_running()
     app.run()
 
 
