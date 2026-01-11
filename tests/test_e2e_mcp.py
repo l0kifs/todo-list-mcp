@@ -42,6 +42,8 @@ def _base_payload(unique: str) -> dict:
         "description": "happy path",
         "status": "open",
         "priority": "medium",
+        "urgency": "medium",
+        "time_estimate": 2.5,
         "due_date": due,
         "tags": ["e2e"],
         "assignee": "bot",
@@ -104,6 +106,8 @@ def test_update_task(mcp_client: SyncMCPClient, unique_task_name: str) -> None:
                         "filename": unique_task_name,
                         "status": "done",
                         "priority": "high",
+                        "urgency": "low",
+                        "time_estimate": 1.0,
                         "description": "done and high",
                     }
                 ]
@@ -119,6 +123,8 @@ def test_update_task(mcp_client: SyncMCPClient, unique_task_name: str) -> None:
     task = _unwrap(read_res)["tasks"][0]["task"]
     assert task["status"] == "done"
     assert task["priority"] == "high"
+    assert task["urgency"] == "low"
+    assert task["time_estimate"] == 1.0
 
 
 def test_list_filters_and_sort(

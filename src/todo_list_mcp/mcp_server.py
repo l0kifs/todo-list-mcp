@@ -30,6 +30,7 @@ from todo_list_mcp.settings import get_settings
 
 Status = Literal["open", "in-progress", "done"]
 Priority = Literal["low", "medium", "high"]
+Urgency = Literal["low", "medium", "high"]
 
 
 class TaskPayload(BaseModel):
@@ -42,6 +43,13 @@ class TaskPayload(BaseModel):
     )
     priority: Priority = Field(
         "medium", description="Task priority: 'low', 'medium', or 'high'"
+    )
+    urgency: Urgency = Field(
+        "medium", description="Task urgency level: 'low', 'medium', or 'high'"
+    )
+    time_estimate: Optional[float] = Field(
+        None,
+        description="Estimated time to complete in hours (e.g., 1.5 for 1.5 hours)",
     )
     due_date: Optional[str] = Field(
         None, description="Due date in ISO 8601 format (e.g., '2026-01-15T10:00:00Z')"
@@ -179,7 +187,7 @@ def create_tasks(body: CreateTaskRequest) -> dict:
     assigned timestamps.
 
     Example: Create a single task with default filename:
-    {"tasks": [{"title": "Review PR", "priority": "high", "due_date": "2026-01-15T10:00:00Z"}]}
+    {"tasks": [{"title": "Review PR", "priority": "high", "urgency": "high", "time_estimate": 2.5, "due_date": "2026-01-15T10:00:00Z"}]}
 
     Example: Create multiple tasks with custom filenames:
     {"tasks": [{"title": "Task 1"}, {"title": "Task 2"}], "filenames": ["task1.yaml", "task2.yaml"]}
@@ -231,10 +239,10 @@ def update_tasks(body: UpdateTaskRequest) -> dict:
     are updated; others remain unchanged. The updated_at timestamp is automatically set.
 
     Example: Mark a task as done and change priority:
-    {"updates": [{"filename": "review-pr.yaml", "status": "done", "priority": "high"}]}
+    {"updates": [{"filename": "review-pr.yaml", "status": "done", "priority": "high", "urgency": "low"}]}
 
     Example: Update multiple tasks:
-    {"updates": [{"filename": "task1.yaml", "status": "in-progress"}, {"filename": "task2.yaml", "assignee": "John"}]}
+    {"updates": [{"filename": "task1.yaml", "status": "in-progress", "time_estimate": 3.0}, {"filename": "task2.yaml", "assignee": "John"}]}
     """
     updated_paths: List[str] = []
     for item in body.updates:
@@ -541,6 +549,8 @@ def _serialize_task(task: TaskPayload) -> str:
         "description",
         "status",
         "priority",
+        "urgency",
+        "time_estimate",
         "due_date",
         "tags",
         "assignee",
