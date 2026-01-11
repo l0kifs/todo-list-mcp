@@ -58,19 +58,12 @@ class TaskPayload(BaseModel):
     updated_at: Optional[str] = Field(
         None, description="Last update timestamp in ISO 8601 format"
     )
-    reminders: List[str] = Field(
-        default_factory=list,
-        description="List of reminder timestamps in ISO 8601 format",
-    )
 
     @root_validator(pre=True)
     def normalize_lists(cls, values: dict) -> dict:  # type: ignore[override]
         tags = values.get("tags")
-        reminders = values.get("reminders")
         if tags is None:
             values["tags"] = []
-        if reminders is None:
-            values["reminders"] = []
         return values
 
 
@@ -183,7 +176,7 @@ def create_tasks(body: CreateTaskRequest) -> dict:
     """Create one or more tasks in the GitHub repository.
 
     Tasks are stored as YAML files in the tasks/ directory. Each task is automatically
-    assigned timestamps and can include reminders for desktop notifications.
+    assigned timestamps.
 
     Example: Create a single task with default filename:
     {"tasks": [{"title": "Review PR", "priority": "high", "due_date": "2026-01-15T10:00:00Z"}]}
@@ -367,7 +360,11 @@ def list_tasks(body: ListTaskRequest) -> dict:
 
 class SetRemindersRequest(BaseModel):
     reminders: List[dict] = Field(
-        description="List of reminders to set. Each reminder should have 'title', 'message', and 'due_at' (ISO 8601 format)"
+        description="List of reminders to set. Each reminder should have 'title', 'message', 'due_at' (ISO 8601 format), and optionally 'task_filename'"
+    )
+    task_filename: Optional[str] = Field(
+        None,
+        description="Optional task filename to associate with all reminders (can be overridden per reminder)",
     )
 
 
@@ -435,15 +432,26 @@ def set_reminders(body: SetRemindersRequest) -> dict:
     """Set one or more reminders via the reminder daemon.
 
     Each reminder must specify a title, message, and due_at timestamp in ISO 8601 format.
+    Optionally, you can link reminders to a task by providing task_filename at the request level
+    (applies to all reminders) or per individual reminder (overrides request-level setting).
     The reminders will be stored persistently and delivered by the reminder daemon.
 
     Example: Set a single reminder:
     {"reminders": [{"title": "Meeting", "message": "Team standup", "due_at": "2026-01-15T10:00:00Z"}]}
 
-    Example: Set multiple reminders:
+    Example: Set a reminder linked to a task:
+    {"reminders": [{"title": "Review PR", "message": "Review the pull request", "due_at": "2026-01-15T14:00:00Z"}], "task_filename": "tasks/review-pr-abc123.yaml"}
+
+    Example: Set multiple reminders for the same task:
     {"reminders": [
-        {"title": "Call", "message": "Phone client", "due_at": "2026-01-15T14:00:00Z"},
-        {"title": "Break", "message": "Time for a break", "due_at": "2026-01-15T15:00:00Z"}
+        {"title": "Start work", "message": "Begin code review", "due_at": "2026-01-15T09:00:00Z"},
+        {"title": "Follow up", "message": "Check review status", "due_at": "2026-01-15T17:00:00Z"}
+    ], "task_filename": "tasks/review-pr-abc123.yaml"}
+
+    Example: Set multiple reminders with mixed task associations:
+    {"reminders": [
+        {"title": "Task A reminder", "message": "Work on A", "due_at": "2026-01-15T10:00:00Z", "task_filename": "tasks/task-a.yaml"},
+        {"title": "Task B reminder", "message": "Work on B", "due_at": "2026-01-15T14:00:00Z", "task_filename": "tasks/task-b.yaml"}
     ]}
     """
     results = []
@@ -451,12 +459,17 @@ def set_reminders(body: SetRemindersRequest) -> dict:
         title = reminder.get("title", "Reminder")
         message = reminder.get("message", "")
         due_at = reminder.get("due_at", "")
+        # Use reminder-specific task_filename, fall back to request-level one
+        task_filename = reminder.get("task_filename") or body.task_filename
 
         if not due_at:
             results.append({"error": "Missing due_at timestamp", "reminder": reminder})
             continue
 
-        output, code = _run_reminder_cli(["add", title, message, due_at])
+        args = ["add", title, message, due_at]
+        if task_filename:
+            args.extend(["--task", task_filename])
+        output, code = _run_reminder_cli(args)
         if code == 0:
             # Extract ID from output if possible
             reminder_id = "unknown"
@@ -533,7 +546,6 @@ def _serialize_task(task: TaskPayload) -> str:
         "assignee",
         "created_at",
         "updated_at",
-        "reminders",
     ]
     ordered = {k: payload.get(k) for k in ordered_keys if k in payload}
     return yaml.safe_dump(ordered, sort_keys=False, allow_unicode=False)

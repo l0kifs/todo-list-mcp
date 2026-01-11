@@ -182,3 +182,44 @@ def test_archive_task(mcp_client: SyncMCPClient, unique_task_name: str) -> None:
         t for t in after_data["tasks"] if t["filename"].endswith(unique_task_name)
     ]
     assert not listed_after
+
+
+def test_reminder_tools_happy_path(mcp_client: SyncMCPClient) -> None:
+    due_at = (datetime.now(tz=UTC) + timedelta(minutes=2)).isoformat()
+    reminder_title = f"e2e-reminder-{uuid.uuid4().hex[:8]}"
+
+    set_res = mcp_client.call_tool(
+        "set_reminders",
+        {
+            "body": {
+                "reminders": [
+                    {
+                        "title": reminder_title,
+                        "message": "test reminder",
+                        "due_at": due_at,
+                    }
+                ]
+            }
+        },
+    )
+    set_data = _unwrap(set_res)
+    first = set_data["results"][0]
+    assert first["status"] == "added"
+    reminder_id = first["id"]
+    assert reminder_id != "unknown"
+
+    list_res = mcp_client.call_tool("list_reminders", {})
+    list_data = _unwrap(list_res)
+    assert list_data["status"] == "success"
+    assert reminder_id in list_data["output"]
+
+    remove_res = mcp_client.call_tool(
+        "remove_reminders", {"body": {"ids": [reminder_id]}}
+    )
+    remove_data = _unwrap(remove_res)
+    assert remove_data["status"] == "success"
+
+    list_after = mcp_client.call_tool("list_reminders", {})
+    list_after_data = _unwrap(list_after)
+    if list_after_data.get("status") == "success":
+        assert reminder_id not in list_after_data["output"]

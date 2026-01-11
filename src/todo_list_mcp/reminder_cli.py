@@ -50,6 +50,9 @@ class Reminder:
     message: str
     due_at: str  # ISO 8601 timestamp
     created_at: str  # ISO 8601 timestamp
+    task_filename: Optional[str] = (
+        None  # Related task file (e.g., 'tasks/my-task.yaml')
+    )
 
     def is_due(self) -> bool:
         """Check if the reminder is due."""
@@ -258,6 +261,9 @@ def add(
     title: str = typer.Argument(..., help="Reminder title"),
     message: str = typer.Argument(..., help="Reminder message"),
     due_at: str = typer.Argument(..., help="Due time (ISO 8601 format)"),
+    task_filename: Optional[str] = typer.Option(
+        None, "--task", "-t", help="Related task filename"
+    ),
 ) -> None:
     """Add a new reminder."""
     # Validate due_at format
@@ -276,6 +282,7 @@ def add(
         message=message,
         due_at=due_at,
         created_at=_now_iso(),
+        task_filename=task_filename,
     )
     store.add(reminder)
     console.print(f"[green]✓[/green] Reminder added: {reminder.id}")
@@ -296,12 +303,19 @@ def list() -> None:
     table.add_column("Title", style="bold")
     table.add_column("Message")
     table.add_column("Due At", style="yellow")
+    table.add_column("Task", style="magenta")
     table.add_column("Status")
 
     for reminder in reminders:
         status = "[red]DUE[/red]" if reminder.is_due() else "[green]PENDING[/green]"
+        task_display = reminder.task_filename or "[dim]-[/dim]"
         table.add_row(
-            reminder.id, reminder.title, reminder.message, reminder.due_at, status
+            reminder.id,
+            reminder.title,
+            reminder.message,
+            reminder.due_at,
+            task_display,
+            status,
         )
 
     console.print(table)
