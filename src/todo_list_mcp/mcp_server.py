@@ -19,7 +19,7 @@ from typing import Any, Dict, List, Literal, Optional
 import yaml
 from fastmcp import FastMCP
 from loguru import logger
-from pydantic import BaseModel, Field, ValidationError, root_validator
+from pydantic import BaseModel, Field, ValidationError, model_validator
 
 from todo_list_mcp.github_file_client import GitHubFileClient
 from todo_list_mcp.logging_config import setup_logging
@@ -67,7 +67,7 @@ class TaskPayload(BaseModel):
         None, description="Last update timestamp in ISO 8601 format"
     )
 
-    @root_validator(pre=True)
+    @model_validator(mode="before")
     def normalize_lists(cls, values: dict) -> dict:  # type: ignore[override]
         tags = values.get("tags")
         if tags is None:
@@ -564,7 +564,7 @@ def _serialize_task(task: TaskPayload) -> str:
 def main() -> None:
     logger.info("Starting todo-list MCP server")
     _ensure_daemon_running()
-    app.run()
+    app.run(show_banner=False)
 
 
 if __name__ == "__main__":

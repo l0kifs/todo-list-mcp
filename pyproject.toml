@@ -8,10 +8,37 @@ version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [
+    { name = "l0kifs", email = "l0kifs91@gmail.com" }
+]
+maintainers = [
+    { name = "l0kifs", email = "l0kifs91@gmail.com" }
+]
+keywords = [
+    "mcp",
+    "model-context-protocol",
+    "developer-tools",
+    "fastmcp"
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Environment :: Plugins",
+    "Natural Language :: English",
+]
 dependencies = [
     "fastmcp>=2.14.2",
     "pydantic>=2.11.7",
-    "sqlalchemy>=2.0.41",
     "httpx>=0.28.1",
 
     # CLI interface
@@ -23,19 +50,26 @@ dependencies = [
     "pydantic-settings>=2.12.0",
 ]
 
+[tool.uv]
+package = true
+
+[project.urls]
+Homepage = "https://github.com/l0kifs/todo-list-mcp"
+Documentation = "https://github.com/l0kifs/todo-list-mcp/blob/main/README.md"
+Repository = "https://github.com/l0kifs/todo-list-mcp.git"
+Issues = "https://github.com/l0kifs/todo-list-mcp/issues"
+Changelog = "https://github.com/l0kifs/todo-list-mcp/blob/main/CHANGELOG.md"
+
+[project.scripts]
+todo-list-mcp = "todo_list_mcp.mcp_server:main"
+reminder-daemon = "todo_list_mcp.reminder_cli:app"
+
 [dependency-groups]
 dev = [
     "pytest>=9.0.1",
     "ruff>=0.14.5",
     "ty>=0.0.11"
 ]
-
-[tool.uv]
-package = true
-
-[project.scripts]
-todo-list-mcp = "todo_list_mcp.mcp_server:main"
-reminder-daemon = "todo_list_mcp.reminder_cli:app"
 
 [tool.pytest.ini_options]
 markers = [
