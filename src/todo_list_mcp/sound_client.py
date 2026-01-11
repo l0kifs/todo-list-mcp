@@ -16,6 +16,7 @@ import threading
 import time
 import uuid
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 from loguru import logger
@@ -26,6 +27,27 @@ WorkerRequest = tuple[
     dict[str, object],
     queue.Queue[tuple[bool, object]],
 ]
+
+
+def get_default_sound_path() -> Optional[str]:
+    """Get the path to the default reminder sound.
+
+    Returns:
+        Path to the default sound file if it exists, None otherwise.
+    """
+    # Try to find the bundled sound file
+    package_dir = Path(__file__).parent
+    sound_path = package_dir / "assets" / "reminder_chime.wav"
+
+    if sound_path.exists():
+        return str(sound_path)
+
+    logger.warning(
+        "Default sound file not found",
+        extra={"component": "sound_client", "path": str(sound_path)},
+    )
+    return None
+
 
 @dataclass
 class _PlaybackHandle:
@@ -95,6 +117,10 @@ class SoundClient:
         loop: bool = False,
         interval_seconds: float = 5.0,
     ) -> str:
+        # If no source is provided, use the default sound
+        if source is None:
+            source = get_default_sound_path()
+
         interval_seconds = max(0.25, float(interval_seconds))
         sound_id = str(uuid.uuid4())
         sound = Sound(
@@ -469,29 +495,8 @@ class SoundClient:
                 },
             )
 
+
 # Example usage and testing
-
-def _find_test_sound() -> Optional[str]:
-    import glob
-
-    if sys.platform == "linux":
-        for pattern in [
-            "/usr/share/sounds/**/*.wav",
-            "/usr/share/sounds/**/*.oga",
-            "/usr/share/sounds/**/*.ogg",
-        ]:
-            sounds = glob.glob(pattern, recursive=True)
-            if sounds:
-                return sounds[0]
-    elif sys.platform == "darwin":
-        sounds = glob.glob("/System/Library/Sounds/*.aiff")
-        if sounds:
-            return sounds[0]
-    elif sys.platform.startswith("win"):
-        sounds = glob.glob("C:/Windows/Media/*.wav")
-        if sounds:
-            return sounds[0]
-    return None
 
 
 def main() -> None:
@@ -509,12 +514,12 @@ def main() -> None:
     print("Platform:", sys.platform)
     print()
 
-    test_sound = _find_test_sound()
+    default_sound = get_default_sound_path()
     client = SoundClient()
     try:
-        print(f"Found test sound: {test_sound}")
-        print("\nTest 1: Playing sound file once...")
-        sound_id = client.create_sound(source=test_sound, loop=False)
+        print(f"Default sound: {default_sound}")
+        print("\nTest 1: Playing default sound once...")
+        sound_id = client.create_sound(loop=False)
         print("Created sound", sound_id)
         time.sleep(2)
 
@@ -536,7 +541,9 @@ def main() -> None:
         time.sleep(1)
 
         print("\n--- Usage Notes ---")
-        print("To play a custom sound file:")
+        print("Default sound is used automatically when no source is specified:")
+        print("  client.create_sound(loop=False)")
+        print("\nTo play a custom sound file:")
         print("  client.create_sound(source='/path/to/sound.wav', loop=False)")
         print("\nSupported formats vary by platform:")
         print("  Linux: WAV (paplay/aplay) or any format with ffplay")
