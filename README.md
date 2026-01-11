@@ -40,7 +40,7 @@ Enter the following details in your `mcp.json` configuration file:
     "args": [
         "todo-list-mcp"
     ],
-    "envFile": "~/.todo-list-mcp/.env"
+    "envFile": "path/to/user/home/.todo-list-mcp/.env"
 },
 ```
 
