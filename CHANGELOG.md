@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - YYYY-MM-DD
+## [Unreleased]
 
 ### Added
 - None yet
@@ -16,4 +16,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - None yet
 
-[Unreleased]: <URL to release tag>
+## [0.1.0] - 2026-01-11
+
+### Added
+- Todo List Management with GitHub integration
+- Reminder service with desktop notifications
+- Cross-platform sound system support
+- MCP server implementation with FastMCP
+- CLI interface for reminder management
+- Background daemon for reminder notifications
+- Support for Windows, macOS, and Linux
+
+[Unreleased]: https://github.com/l0kifs/todo-list-mcp/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/l0kifs/todo-list-mcp/releases/tag/v0.1.0
