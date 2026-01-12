@@ -16,6 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - None yet
 
+## [0.1.3] - 2026-01-11
+
+### Changed
+- Updated type annotations in `list_tasks` function for improved clarity
+
 ## [0.1.2] - 2026-01-11
 
 ### Added
@@ -47,7 +52,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Background daemon for reminder notifications
 - Support for Windows, macOS, and Linux
 
-[Unreleased]: https://github.com/l0kifs/todo-list-mcp/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/l0kifs/todo-list-mcp/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/l0kifs/todo-list-mcp/releases/tag/v0.1.3
 [0.1.2]: https://github.com/l0kifs/todo-list-mcp/releases/tag/v0.1.2
 [0.1.1]: https://github.com/l0kifs/todo-list-mcp/releases/tag/v0.1.1
 [0.1.0]: https://github.com/l0kifs/todo-list-mcp/releases/tag/v0.1.0
