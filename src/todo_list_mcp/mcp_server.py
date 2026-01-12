@@ -75,54 +75,6 @@ class TaskPayload(BaseModel):
         return values
 
 
-class CreateTaskRequest(BaseModel):
-    tasks: List[TaskPayload] = Field(description="List of tasks to create")
-    filenames: Optional[List[str]] = Field(
-        None,
-        description="Optional explicit filenames for tasks (e.g., ['my-task.yaml']). If not provided, filenames are auto-generated from titles",
-    )
-
-
-class ReadTaskRequest(BaseModel):
-    filenames: List[str] = Field(
-        description="List of task filenames to read (e.g., ['task-abc123.yaml', 'my-task.yaml'])"
-    )
-
-
-class UpdateTaskRequest(BaseModel):
-    updates: List[dict] = Field(
-        description="List of updates, each containing 'filename' and fields to update (e.g., [{'filename': 'task.yaml', 'status': 'done', 'priority': 'high'}])"
-    )
-
-
-class ArchiveTaskRequest(BaseModel):
-    filenames: List[str] = Field(
-        description="List of task filenames to archive (e.g., ['completed-task.yaml']). Tasks are moved to archive/ directory"
-    )
-
-
-class ListTaskRequest(BaseModel):
-    status: Optional[Status] = Field(
-        None, description="Filter by status: 'open', 'in-progress', or 'done'"
-    )
-    priority: Optional[Priority] = Field(
-        None, description="Filter by priority: 'low', 'medium', or 'high'"
-    )
-    tags: Optional[List[str]] = Field(
-        None, description="Filter by tags (tasks must have all specified tags)"
-    )
-    assignee: Optional[str] = Field(None, description="Filter by assignee name")
-    due_before: Optional[str] = Field(
-        None, description="Filter tasks due before this date (ISO 8601 format)"
-    )
-    due_after: Optional[str] = Field(
-        None, description="Filter tasks due after this date (ISO 8601 format)"
-    )
-    page: int = Field(1, description="Page number for pagination (starts at 1)", ge=1)
-    page_size: int = Field(20, description="Number of tasks per page", ge=1, le=100)
-    include_description: bool = Field(
-        False, description="Whether to include task descriptions in results"
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -181,10 +133,42 @@ app = FastMCP(name=settings.app_name, version=settings.app_version)
 
 @app.tool()
 def create_tasks(
-    body: Annotated[
-        CreateTaskRequest,
-        "Request body containing tasks to create. Each task should have a title and optional fields like priority, urgency, time_estimate, due_date, tags, assignee, etc.",
+    tasks: Annotated[
+        List[dict],
+        """List of tasks to create. Each task is a dictionary with the following schema:
+        
+        Required fields:
+        - title (str): Task title or summary
+        
+        Optional fields:
+        - description (str | None): Detailed task description or notes
+        - status (str): Task status, one of: "open" (default), "in-progress", "done"
+        - priority (str): Task priority, one of: "low", "medium" (default), "high"
+        - urgency (str): Task urgency level, one of: "low", "medium" (default), "high"
+        - time_estimate (float | None): Estimated time to complete in hours (e.g., 1.5 for 1.5 hours)
+        - due_date (str | None): Due date in ISO 8601 format (e.g., "2026-01-15T10:00:00Z")
+        - tags (list[str]): List of tags for categorization (default: [])
+        - assignee (str | None): Person or entity assigned to the task
+        - created_at (str | None): Task creation timestamp in ISO 8601 format (auto-set if not provided)
+        - updated_at (str | None): Last update timestamp in ISO 8601 format (auto-set if not provided)
+        
+        Example task dict:
+        {
+            "title": "Review PR",
+            "description": "Review the pull request for the new feature",
+            "status": "open",
+            "priority": "high",
+            "urgency": "high",
+            "time_estimate": 2.5,
+            "due_date": "2026-01-15T10:00:00Z",
+            "tags": ["code-review", "urgent"],
+            "assignee": "John Doe"
+        }""",
     ],
+    filenames: Annotated[
+        Optional[List[str]],
+        "Optional explicit filenames for tasks (e.g., ['my-task.yaml']). If not provided, filenames are auto-generated from titles",
+    ] = None,
 ) -> dict:
     """Create one or more tasks in the GitHub repository.
 
@@ -192,16 +176,16 @@ def create_tasks(
     assigned timestamps.
 
     Example: Create a single task with default filename:
-    {"tasks": [{"title": "Review PR", "priority": "high", "urgency": "high", "time_estimate": 2.5, "due_date": "2026-01-15T10:00:00Z"}]}
+    tasks=[{"title": "Review PR", "priority": "high", "urgency": "high", "time_estimate": 2.5, "due_date": "2026-01-15T10:00:00Z"}]
 
     Example: Create multiple tasks with custom filenames:
-    {"tasks": [{"title": "Task 1"}, {"title": "Task 2"}], "filenames": ["task1.yaml", "task2.yaml"]}
+    tasks=[{"title": "Task 1"}, {"title": "Task 2"}], filenames=["task1.yaml", "task2.yaml"]
     """
-    tasks = body.tasks
-    filenames = body.filenames or []
+    filenames = filenames or []
+    task_objects = [TaskPayload(**task) for task in tasks]
     outputs = []
     file_pairs: List[tuple[str, str]] = []
-    for idx, task in enumerate(tasks):
+    for idx, task in enumerate(task_objects):
         now_iso = _now_iso()
         task.created_at = task.created_at or now_iso
         task.updated_at = now_iso
@@ -220,9 +204,9 @@ def create_tasks(
 
 @app.tool()
 def read_tasks(
-    body: Annotated[
-        ReadTaskRequest,
-        "Request body containing list of task filenames to read. Returns complete task data including all fields and metadata.",
+    filenames: Annotated[
+        List[str],
+        "List of task filenames to read (e.g., ['task-abc123.yaml', 'my-task.yaml']). Returns complete task data including all fields and metadata.",
     ],
 ) -> dict:
     """Read one or more tasks from the GitHub repository by filename.
@@ -230,10 +214,10 @@ def read_tasks(
     Returns complete task data including all fields and metadata. Use this to retrieve
     task details for review or before updating.
 
-    Example: {"filenames": ["review-pr-abc123.yaml", "fix-bug-def456.yaml"]}
+    Example: filenames=["review-pr-abc123.yaml", "fix-bug-def456.yaml"]
     """
     results = []
-    for name in body.filenames:
+    for name in filenames:
         path = _task_path(name)
         file = client.read_file(path)
         task = yaml.safe_load(file.content) or {}
@@ -243,9 +227,34 @@ def read_tasks(
 
 @app.tool()
 def update_tasks(
-    body: Annotated[
-        UpdateTaskRequest,
-        "Request body containing list of updates. Each update must specify a filename and the fields to modify. Only provided fields are updated; others remain unchanged.",
+    updates: Annotated[
+        List[dict],
+        """List of updates, each containing 'filename' and fields to update. Only provided fields are updated; others remain unchanged.
+        
+        Required fields:
+        - filename (str): Task filename to update (e.g., "task-abc123.yaml" or "tasks/task-abc123.yaml")
+        
+        Optional fields (any task fields can be updated):
+        - title (str): Task title or summary
+        - description (str | None): Detailed task description or notes
+        - status (str): Task status, one of: "open", "in-progress", "done"
+        - priority (str): Task priority, one of: "low", "medium", "high"
+        - urgency (str): Task urgency level, one of: "low", "medium", "high"
+        - time_estimate (float | None): Estimated time to complete in hours (e.g., 1.5 for 1.5 hours)
+        - due_date (str | None): Due date in ISO 8601 format (e.g., "2026-01-15T10:00:00Z")
+        - tags (list[str]): List of tags for categorization
+        - assignee (str | None): Person or entity assigned to the task
+        
+        Note: created_at and updated_at are automatically managed (updated_at is auto-set on each update).
+        
+        Example update dict:
+        {
+            "filename": "review-pr-abc123.yaml",
+            "status": "done",
+            "priority": "high",
+            "urgency": "low",
+            "assignee": "John Doe"
+        }""",
     ],
 ) -> dict:
     """Update one or more existing tasks in the GitHub repository.
@@ -254,14 +263,17 @@ def update_tasks(
     are updated; others remain unchanged. The updated_at timestamp is automatically set.
 
     Example: Mark a task as done and change priority:
-    {"updates": [{"filename": "review-pr.yaml", "status": "done", "priority": "high", "urgency": "low"}]}
+    updates=[{"filename": "review-pr.yaml", "status": "done", "priority": "high", "urgency": "low"}]
 
     Example: Update multiple tasks:
-    {"updates": [{"filename": "task1.yaml", "status": "in-progress", "time_estimate": 3.0}, {"filename": "task2.yaml", "assignee": "John"}]}
+    updates=[{"filename": "task1.yaml", "status": "in-progress", "time_estimate": 3.0}, {"filename": "task2.yaml", "assignee": "John"}]
     """
     updated_paths: List[str] = []
-    for item in body.updates:
-        filename = _task_path(item.get("filename"))
+    for item in updates:
+        filename_str = item.get("filename")
+        if not filename_str:
+            continue
+        filename = _task_path(filename_str)
         existing = client.read_file(filename)
         data = yaml.safe_load(existing.content) or {}
         merged = {**data, **{k: v for k, v in item.items() if k != "filename"}}
@@ -276,9 +288,9 @@ def update_tasks(
 
 @app.tool()
 def archive_tasks(
-    body: Annotated[
-        ArchiveTaskRequest,
-        "Request body containing list of task filenames to archive. Tasks are moved from tasks/ to archive/ directory, removing them from active task lists while preserving their data.",
+    filenames: Annotated[
+        List[str],
+        "List of task filenames to archive (e.g., ['completed-task.yaml']). Tasks are moved from tasks/ to archive/ directory, removing them from active task lists while preserving their data.",
     ],
 ) -> dict:
     """Archive completed or obsolete tasks by moving them to the archive/ directory.
@@ -286,10 +298,10 @@ def archive_tasks(
     Archived tasks are moved from tasks/ to archive/ in the GitHub repository, removing
     them from active task lists while preserving their data for future reference.
 
-    Example: {"filenames": ["completed-task.yaml", "old-task.yaml"]}
+    Example: filenames=["completed-task.yaml", "old-task.yaml"]
     """
     archived: List[str] = []
-    for name in body.filenames:
+    for name in filenames:
         src = _task_path(name)
         tgt_name = Path(name).name
         tgt = f"archive/{tgt_name}"
@@ -300,10 +312,42 @@ def archive_tasks(
 
 @app.tool()
 def list_tasks(
-    body: Annotated[
-        ListTaskRequest,
-        "Request body with optional filters for listing tasks. Supports filtering by status, priority, tags, assignee, and date ranges. Includes pagination controls.",
-    ],
+    status: Annotated[
+        Optional[Status],
+        "Filter by status: 'open', 'in-progress', or 'done'",
+    ] = None,
+    priority: Annotated[
+        Optional[Priority],
+        "Filter by priority: 'low', 'medium', or 'high'",
+    ] = None,
+    tags: Annotated[
+        Optional[List[str]],
+        "Filter by tags (tasks must have all specified tags)",
+    ] = None,
+    assignee: Annotated[
+        Optional[str],
+        "Filter by assignee name",
+    ] = None,
+    due_before: Annotated[
+        Optional[str],
+        "Filter tasks due before this date (ISO 8601 format)",
+    ] = None,
+    due_after: Annotated[
+        Optional[str],
+        "Filter tasks due after this date (ISO 8601 format)",
+    ] = None,
+    page: Annotated[
+        int,
+        "Page number for pagination (starts at 1)",
+    ] = 1,
+    page_size: Annotated[
+        int,
+        "Number of tasks per page",
+    ] = 20,
+    include_description: Annotated[
+        bool,
+        "Whether to include task descriptions in results",
+    ] = False,
 ) -> dict:
     """List active tasks from the GitHub repository with filtering, sorting, and pagination.
 
@@ -312,13 +356,13 @@ def list_tasks(
     descriptions are excluded for brevity; set include_description=true to include them.
 
     Example: List all high-priority open tasks:
-    {"status": "open", "priority": "high"}
+    status="open", priority="high"
 
     Example: List tasks due next week:
-    {"due_after": "2026-01-10T00:00:00Z", "due_before": "2026-01-17T23:59:59Z", "include_description": true}
+    due_after="2026-01-10T00:00:00Z", due_before="2026-01-17T23:59:59Z", include_description=True
 
     Example: List tasks by assignee with pagination:
-    {"assignee": "John", "page": 1, "page_size": 10}
+    assignee="John", page=1, page_size=10
     """
     try:
         files = client.read_directory_files("tasks")
@@ -326,7 +370,7 @@ def list_tasks(
         detail = str(exc)
         if "not a directory" in detail.lower() or "not found" in detail.lower():
             logger.info("tasks/ directory missing; returning empty list")
-            return {"total": 0, "page": 1, "page_size": body.page_size, "tasks": []}
+            return {"total": 0, "page": 1, "page_size": page_size, "tasks": []}
         raise
     tasks: List[dict] = []
     for f in files:
@@ -336,31 +380,31 @@ def list_tasks(
         except ValidationError:
             logger.warning("Skipping invalid task file", extra={"path": f.path})
             continue
-        if body.status and task.status != body.status:
+        if status and task.status != status:
             continue
-        if body.priority and task.priority != body.priority:
+        if priority and task.priority != priority:
             continue
-        if body.assignee and task.assignee != body.assignee:
+        if assignee and task.assignee != assignee:
             continue
-        if body.tags:
-            if not set(body.tags).issubset(set(task.tags)):
+        if tags:
+            if not set(tags).issubset(set(task.tags)):
                 continue
-        if body.due_before or body.due_after:
+        if due_before or due_after:
             if not task.due_date:
                 continue
             dt = _parse_iso(task.due_date)
             if dt is None:
                 continue
-            if body.due_before:
-                before_dt = _parse_iso(body.due_before)
+            if due_before:
+                before_dt = _parse_iso(due_before)
                 if before_dt and dt > before_dt:
                     continue
-            if body.due_after:
-                after_dt = _parse_iso(body.due_after)
+            if due_after:
+                after_dt = _parse_iso(due_after)
                 if after_dt and dt < after_dt:
                     continue
         task_dict = task.dict()
-        if not body.include_description:
+        if not include_description:
             task_dict.pop("description", None)
         tasks.append({"filename": f.path, "task": task_dict})
 
@@ -375,13 +419,13 @@ def list_tasks(
 
     tasks.sort(key=_sort_key)
 
-    page = max(1, body.page)
-    size = max(1, min(100, body.page_size))
-    start = (page - 1) * size
+    page_val = max(1, page)
+    size = max(1, min(100, page_size))
+    start = (page_val - 1) * size
     end = start + size
     return {
         "total": len(tasks),
-        "page": page,
+        "page": page_val,
         "page_size": size,
         "tasks": tasks[start:end],
     }
@@ -391,23 +435,6 @@ def list_tasks(
 # Reminder management tools (communicate with reminder_cli daemon)
 
 
-class SetRemindersRequest(BaseModel):
-    reminders: List[dict] = Field(
-        description="List of reminders to set. Each reminder should have 'title', 'message', 'due_at' (ISO 8601 format), and optionally 'task_filename'"
-    )
-    task_filename: Optional[str] = Field(
-        None,
-        description="Optional task filename to associate with all reminders (can be overridden per reminder)",
-    )
-
-
-class RemoveRemindersRequest(BaseModel):
-    ids: List[str] = Field(
-        default_factory=list, description="List of reminder IDs to remove"
-    )
-    all: bool = Field(
-        False, description="If true, remove all reminders (ignores 'ids' field)"
-    )
 
 
 def _run_reminder_cli(args: List[str]) -> tuple[str, int]:
@@ -462,10 +489,38 @@ def _ensure_daemon_running() -> None:
 
 @app.tool()
 def set_reminders(
-    body: Annotated[
-        SetRemindersRequest,
-        "Request body containing reminders to set. Each reminder must have title, message, and due_at (ISO 8601 format). Optionally link to tasks via task_filename.",
+    reminders: Annotated[
+        List[dict],
+        """List of reminders to set. Each reminder is a dictionary with the following schema:
+        
+        Required fields:
+        - title (str): Reminder title or name
+        - message (str): Reminder message or description
+        - due_at (str): Due date/time in ISO 8601 format (e.g., "2026-01-15T10:00:00Z")
+        
+        Optional fields:
+        - task_filename (str | None): Task filename to associate with this reminder (e.g., "tasks/review-pr-abc123.yaml"). 
+          If not provided, uses the request-level task_filename parameter if set.
+        
+        Example reminder dict:
+        {
+            "title": "Review PR",
+            "message": "Review the pull request for the new feature",
+            "due_at": "2026-01-15T14:00:00Z",
+            "task_filename": "tasks/review-pr-abc123.yaml"
+        }
+        
+        Example reminder dict without task association:
+        {
+            "title": "Team Meeting",
+            "message": "Daily standup at 10 AM",
+            "due_at": "2026-01-15T10:00:00Z"
+        }""",
     ],
+    task_filename: Annotated[
+        Optional[str],
+        "Optional task filename to associate with all reminders (can be overridden per reminder)",
+    ] = None,
 ) -> dict:
     """Set one or more reminders via the reminder daemon.
 
@@ -475,38 +530,38 @@ def set_reminders(
     The reminders will be stored persistently and delivered by the reminder daemon.
 
     Example: Set a single reminder:
-    {"reminders": [{"title": "Meeting", "message": "Team standup", "due_at": "2026-01-15T10:00:00Z"}]}
+    reminders=[{"title": "Meeting", "message": "Team standup", "due_at": "2026-01-15T10:00:00Z"}]
 
     Example: Set a reminder linked to a task:
-    {"reminders": [{"title": "Review PR", "message": "Review the pull request", "due_at": "2026-01-15T14:00:00Z"}], "task_filename": "tasks/review-pr-abc123.yaml"}
+    reminders=[{"title": "Review PR", "message": "Review the pull request", "due_at": "2026-01-15T14:00:00Z"}], task_filename="tasks/review-pr-abc123.yaml"
 
     Example: Set multiple reminders for the same task:
-    {"reminders": [
+    reminders=[
         {"title": "Start work", "message": "Begin code review", "due_at": "2026-01-15T09:00:00Z"},
         {"title": "Follow up", "message": "Check review status", "due_at": "2026-01-15T17:00:00Z"}
-    ], "task_filename": "tasks/review-pr-abc123.yaml"}
+    ], task_filename="tasks/review-pr-abc123.yaml"
 
     Example: Set multiple reminders with mixed task associations:
-    {"reminders": [
+    reminders=[
         {"title": "Task A reminder", "message": "Work on A", "due_at": "2026-01-15T10:00:00Z", "task_filename": "tasks/task-a.yaml"},
         {"title": "Task B reminder", "message": "Work on B", "due_at": "2026-01-15T14:00:00Z", "task_filename": "tasks/task-b.yaml"}
-    ]}
+    ]
     """
     results = []
-    for reminder in body.reminders:
+    for reminder in reminders:
         title = reminder.get("title", "Reminder")
         message = reminder.get("message", "")
         due_at = reminder.get("due_at", "")
         # Use reminder-specific task_filename, fall back to request-level one
-        task_filename = reminder.get("task_filename") or body.task_filename
+        reminder_task_filename = reminder.get("task_filename") or task_filename
 
         if not due_at:
             results.append({"error": "Missing due_at timestamp", "reminder": reminder})
             continue
 
         args = ["add", title, message, due_at]
-        if task_filename:
-            args.extend(["--task", task_filename])
+        if reminder_task_filename:
+            args.extend(["--task", reminder_task_filename])
         output, code = _run_reminder_cli(args)
         if code == 0:
             # Extract ID from output if possible
@@ -543,10 +598,14 @@ def list_reminders() -> dict:
 
 @app.tool()
 def remove_reminders(
-    body: Annotated[
-        RemoveRemindersRequest,
-        "Request body for removing reminders. Specify reminder IDs to remove specific reminders, or set 'all' to true to remove all reminders.",
-    ],
+    ids: Annotated[
+        Optional[List[str]],
+        "List of reminder IDs to remove",
+    ] = None,
+    all: Annotated[
+        bool,
+        "If true, remove all reminders (ignores 'ids' field)",
+    ] = False,
 ) -> dict:
     """Remove one or more reminders from the reminder daemon.
 
@@ -554,15 +613,15 @@ def remove_reminders(
     to remove all reminders at once.
 
     Example: Remove specific reminders:
-    {"ids": ["abc123", "def456"]}
+    ids=["abc123", "def456"]
 
     Example: Remove all reminders:
-    {"all": true}
+    all=True
     """
-    if body.all:
+    if all:
         output, code = _run_reminder_cli(["remove", "--all"])
-    elif body.ids:
-        output, code = _run_reminder_cli(["remove"] + body.ids)
+    elif ids:
+        output, code = _run_reminder_cli(["remove"] + ids)
     else:
         return {"error": "Must specify either 'ids' or set 'all' to true"}
 
