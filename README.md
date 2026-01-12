@@ -38,7 +38,7 @@ Enter the following details in your `mcp.json` configuration file:
     "type": "stdio",
     "command": "uvx",
     "args": [
-        "todo-list-mcp"
+        "todo-list-mcp@latest"
     ],
     "envFile": "path/to/user/home/.todo-list-mcp/.env"
 },
