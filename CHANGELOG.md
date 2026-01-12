@@ -16,6 +16,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - None yet
 
+## [0.1.2] - 2026-01-11
+
+### Added
+- Enhanced `list_tasks` function with support for multiple filters for status, priority, and urgency
+- Expanded test coverage for end-to-end MCP functionality
+
+### Changed
+- Improved filtering capabilities in task listing
+
+### Fixed
+- Updated README to specify latest version for todo-list-mcp
+
 ## [0.1.1] - 2026-01-11
 
 ### Changed
@@ -35,6 +47,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Background daemon for reminder notifications
 - Support for Windows, macOS, and Linux
 
-[Unreleased]: https://github.com/l0kifs/todo-list-mcp/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/l0kifs/todo-list-mcp/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/l0kifs/todo-list-mcp/releases/tag/v0.1.2
 [0.1.1]: https://github.com/l0kifs/todo-list-mcp/releases/tag/v0.1.1
 [0.1.0]: https://github.com/l0kifs/todo-list-mcp/releases/tag/v0.1.0
