@@ -313,19 +313,19 @@ def archive_tasks(
 @app.tool()
 def list_tasks(
     status: Annotated[
-        Optional[List[Status]],
+        Optional[list[Literal["open", "in-progress", "done"]]],
         "Filter by status(es): list of 'open', 'in-progress', or 'done'. Can specify multiple statuses (e.g., ['open', 'in-progress'])",
     ] = None,
     priority: Annotated[
-        Optional[List[Priority]],
+        Optional[list[Literal["low", "medium", "high"]]],
         "Filter by priority(ies): list of 'low', 'medium', or 'high'. Can specify multiple priorities (e.g., ['high', 'medium'])",
     ] = None,
     urgency: Annotated[
-        Optional[List[Urgency]],
+        Optional[list[Literal["low", "medium", "high"]]],
         "Filter by urgency level(s): list of 'low', 'medium', or 'high'. Can specify multiple urgencies (e.g., ['high', 'medium'])",
     ] = None,
     tags: Annotated[
-        Optional[List[str]],
+        Optional[list[str]],
         "Filter by tags (tasks must have all specified tags)",
     ] = None,
     assignee: Annotated[
