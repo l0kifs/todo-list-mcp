@@ -14,7 +14,7 @@ import sys
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Literal, Optional
+from typing import Annotated, Any, Dict, List, Literal, Optional
 
 import yaml
 from fastmcp import FastMCP
@@ -180,7 +180,12 @@ app = FastMCP(name=settings.app_name, version=settings.app_version)
 
 
 @app.tool()
-def create_tasks(body: CreateTaskRequest) -> dict:
+def create_tasks(
+    body: Annotated[
+        CreateTaskRequest,
+        "Request body containing tasks to create. Each task should have a title and optional fields like priority, urgency, time_estimate, due_date, tags, assignee, etc.",
+    ],
+) -> dict:
     """Create one or more tasks in the GitHub repository.
 
     Tasks are stored as YAML files in the tasks/ directory. Each task is automatically
@@ -214,7 +219,12 @@ def create_tasks(body: CreateTaskRequest) -> dict:
 
 
 @app.tool()
-def read_tasks(body: ReadTaskRequest) -> dict:
+def read_tasks(
+    body: Annotated[
+        ReadTaskRequest,
+        "Request body containing list of task filenames to read. Returns complete task data including all fields and metadata.",
+    ],
+) -> dict:
     """Read one or more tasks from the GitHub repository by filename.
 
     Returns complete task data including all fields and metadata. Use this to retrieve
@@ -232,7 +242,12 @@ def read_tasks(body: ReadTaskRequest) -> dict:
 
 
 @app.tool()
-def update_tasks(body: UpdateTaskRequest) -> dict:
+def update_tasks(
+    body: Annotated[
+        UpdateTaskRequest,
+        "Request body containing list of updates. Each update must specify a filename and the fields to modify. Only provided fields are updated; others remain unchanged.",
+    ],
+) -> dict:
     """Update one or more existing tasks in the GitHub repository.
 
     Each update must specify a filename and the fields to modify. Only provided fields
@@ -260,7 +275,12 @@ def update_tasks(body: UpdateTaskRequest) -> dict:
 
 
 @app.tool()
-def archive_tasks(body: ArchiveTaskRequest) -> dict:
+def archive_tasks(
+    body: Annotated[
+        ArchiveTaskRequest,
+        "Request body containing list of task filenames to archive. Tasks are moved from tasks/ to archive/ directory, removing them from active task lists while preserving their data.",
+    ],
+) -> dict:
     """Archive completed or obsolete tasks by moving them to the archive/ directory.
 
     Archived tasks are moved from tasks/ to archive/ in the GitHub repository, removing
@@ -279,7 +299,12 @@ def archive_tasks(body: ArchiveTaskRequest) -> dict:
 
 
 @app.tool()
-def list_tasks(body: ListTaskRequest) -> dict:
+def list_tasks(
+    body: Annotated[
+        ListTaskRequest,
+        "Request body with optional filters for listing tasks. Supports filtering by status, priority, tags, assignee, and date ranges. Includes pagination controls.",
+    ],
+) -> dict:
     """List active tasks from the GitHub repository with filtering, sorting, and pagination.
 
     Returns tasks sorted by priority (high to low) and due date (earliest first). Supports
@@ -436,7 +461,12 @@ def _ensure_daemon_running() -> None:
 
 
 @app.tool()
-def set_reminders(body: SetRemindersRequest) -> dict:
+def set_reminders(
+    body: Annotated[
+        SetRemindersRequest,
+        "Request body containing reminders to set. Each reminder must have title, message, and due_at (ISO 8601 format). Optionally link to tasks via task_filename.",
+    ],
+) -> dict:
     """Set one or more reminders via the reminder daemon.
 
     Each reminder must specify a title, message, and due_at timestamp in ISO 8601 format.
@@ -512,7 +542,12 @@ def list_reminders() -> dict:
 
 
 @app.tool()
-def remove_reminders(body: RemoveRemindersRequest) -> dict:
+def remove_reminders(
+    body: Annotated[
+        RemoveRemindersRequest,
+        "Request body for removing reminders. Specify reminder IDs to remove specific reminders, or set 'all' to true to remove all reminders.",
+    ],
+) -> dict:
     """Remove one or more reminders from the reminder daemon.
 
     You can either specify specific reminder IDs to remove, or use the 'all' flag
