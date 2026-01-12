@@ -314,35 +314,43 @@ def archive_tasks(
 def list_tasks(
     status: Annotated[
         Optional[list[Literal["open", "in-progress", "done"]]],
-        "Filter by status(es): list of 'open', 'in-progress', or 'done'. Can specify multiple statuses (e.g., ['open', 'in-progress'])",
+        """Filter by status(es): list of 'open', 'in-progress', or 'done'. 
+        Can specify one or more statuses (e.g., ["open"], ["open", "in-progress"]).
+        If not provided, all statuses are included."""
     ] = None,
     priority: Annotated[
         Optional[list[Literal["low", "medium", "high"]]],
-        "Filter by priority(ies): list of 'low', 'medium', or 'high'. Can specify multiple priorities (e.g., ['high', 'medium'])",
+        """Filter by priority(ies): list of 'low', 'medium', or 'high'. 
+        Can specify one or more priorities (e.g., ["high"], ["high", "medium"]).
+        If not provided, all priorities are included."""
     ] = None,
     urgency: Annotated[
         Optional[list[Literal["low", "medium", "high"]]],
-        "Filter by urgency level(s): list of 'low', 'medium', or 'high'. Can specify multiple urgencies (e.g., ['high', 'medium'])",
+        """Filter by urgency level(s): list of 'low', 'medium', or 'high'. 
+        Can specify one or more urgencies (e.g., ["high"], ["high", "medium"]).
+        If not provided, all urgencies are included."""
     ] = None,
     tags: Annotated[
         Optional[list[str]],
-        "Filter by tags (tasks must have all specified tags)",
+        """Filter by tags (tasks must have all specified tags).
+        Can specify one or more tags (e.g., ["tag1"], ["tag1", "tag2"]).
+        If not provided, all tags are included."""
     ] = None,
     assignee: Annotated[
         Optional[str],
-        "Filter by assignee name",
+        "Filter by assignee name. If not provided, all assignees are included.",
     ] = None,
     due_before: Annotated[
         Optional[str],
-        "Filter tasks due before this date (ISO 8601 format)",
+        "Filter tasks due before this date (ISO 8601 format). If not provided, all due dates are included.",
     ] = None,
     due_after: Annotated[
         Optional[str],
-        "Filter tasks due after this date (ISO 8601 format)",
+        "Filter tasks due after this date (ISO 8601 format). If not provided, all due dates are included.",
     ] = None,
     page: Annotated[
         int,
-        "Page number for pagination (starts at 1)",
+        "Page number for pagination (starts at 1). Default is 1.",
     ] = 1,
     page_size: Annotated[
         int,
@@ -445,8 +453,6 @@ def list_tasks(
 
 # ---------------------------------------------------------------------------
 # Reminder management tools (communicate with reminder_cli daemon)
-
-
 
 
 def _run_reminder_cli(args: List[str]) -> tuple[str, int]:
