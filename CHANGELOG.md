@@ -16,6 +16,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - None yet
 
+## [0.1.1] - 2026-01-11
+
+### Changed
+- Streamlined request handling in MCP server for better code organization
+- Enhanced function signatures with type annotations for request bodies
+- Updated README with correct envFile path configuration
+- Updated publishing guidelines to include change analysis step
+
 ## [0.1.0] - 2026-01-11
 
 ### Added
@@ -27,5 +35,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Background daemon for reminder notifications
 - Support for Windows, macOS, and Linux
 
-[Unreleased]: https://github.com/l0kifs/todo-list-mcp/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/l0kifs/todo-list-mcp/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/l0kifs/todo-list-mcp/releases/tag/v0.1.1
 [0.1.0]: https://github.com/l0kifs/todo-list-mcp/releases/tag/v0.1.0
