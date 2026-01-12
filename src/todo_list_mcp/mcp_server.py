@@ -313,12 +313,16 @@ def archive_tasks(
 @app.tool()
 def list_tasks(
     status: Annotated[
-        Optional[Status],
-        "Filter by status: 'open', 'in-progress', or 'done'",
+        Optional[List[Status]],
+        "Filter by status(es): list of 'open', 'in-progress', or 'done'. Can specify multiple statuses (e.g., ['open', 'in-progress'])",
     ] = None,
     priority: Annotated[
-        Optional[Priority],
-        "Filter by priority: 'low', 'medium', or 'high'",
+        Optional[List[Priority]],
+        "Filter by priority(ies): list of 'low', 'medium', or 'high'. Can specify multiple priorities (e.g., ['high', 'medium'])",
+    ] = None,
+    urgency: Annotated[
+        Optional[List[Urgency]],
+        "Filter by urgency level(s): list of 'low', 'medium', or 'high'. Can specify multiple urgencies (e.g., ['high', 'medium'])",
     ] = None,
     tags: Annotated[
         Optional[List[str]],
@@ -342,21 +346,27 @@ def list_tasks(
     ] = 1,
     page_size: Annotated[
         int,
-        "Number of tasks per page",
+        "Number of tasks per page. Default is 20.",
     ] = 20,
     include_description: Annotated[
         bool,
-        "Whether to include task descriptions in results",
-    ] = False,
+        "Whether to include task descriptions in results. Default is True.",
+    ] = True,
 ) -> dict:
     """List active tasks from the GitHub repository with filtering, sorting, and pagination.
 
     Returns tasks sorted by priority (high to low) and due date (earliest first). Supports
-    filtering by status, priority, tags, assignee, and date ranges. By default, task
+    filtering by status, priority, urgency, tags, assignee, and date ranges. By default, task
     descriptions are excluded for brevity; set include_description=true to include them.
 
     Example: List all high-priority open tasks:
-    status="open", priority="high"
+    status=["open"], priority=["high"]
+
+    Example: List tasks with multiple statuses and priorities:
+    status=["open", "in-progress"], priority=["high", "medium"]
+
+    Example: List high-urgency tasks:
+    urgency=["high"]
 
     Example: List tasks due next week:
     due_after="2026-01-10T00:00:00Z", due_before="2026-01-17T23:59:59Z", include_description=True
@@ -380,9 +390,11 @@ def list_tasks(
         except ValidationError:
             logger.warning("Skipping invalid task file", extra={"path": f.path})
             continue
-        if status and task.status != status:
+        if status and task.status not in status:
             continue
-        if priority and task.priority != priority:
+        if priority and task.priority not in priority:
+            continue
+        if urgency and task.urgency not in urgency:
             continue
         if assignee and task.assignee != assignee:
             continue

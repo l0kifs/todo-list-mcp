@@ -141,7 +141,7 @@ def test_list_filters_and_sort(
     list_res = mcp_client.call_tool(
         "list_tasks",
         {
-            "status": "open",
+            "status": ["open"],
             "include_description": True,
             "page": 1,
             "page_size": 100,
@@ -175,7 +175,7 @@ def test_archive_task(mcp_client: SyncMCPClient, unique_task_name: str) -> None:
     list_after = mcp_client.call_tool(
         "list_tasks",
         {
-            "status": "open",
+            "status": ["open"],
             "include_description": False,
             "page": 1,
             "page_size": 100,
@@ -186,6 +186,129 @@ def test_archive_task(mcp_client: SyncMCPClient, unique_task_name: str) -> None:
         t for t in after_data["tasks"] if t["filename"].endswith(unique_task_name)
     ]
     assert not listed_after
+
+
+def test_list_multiple_filters(
+    mcp_client: SyncMCPClient, unique_task_name: str
+) -> None:
+    """Test filtering with multiple statuses, priorities, and urgencies."""
+    # Create tasks with different statuses, priorities, and urgencies
+    task1_name = f"e2e-multi-1-{uuid.uuid4().hex[:8]}.yaml"
+    task2_name = f"e2e-multi-2-{uuid.uuid4().hex[:8]}.yaml"
+    task3_name = f"e2e-multi-3-{uuid.uuid4().hex[:8]}.yaml"
+    
+    due = (datetime.now(tz=UTC) + timedelta(days=2)).isoformat()
+    
+    try:
+        # Create task with status="open", priority="high", urgency="high"
+        mcp_client.call_tool(
+            "create_tasks",
+            {
+                "tasks": [{
+                    "title": "Multi-filter Task 1",
+                    "status": "open",
+                    "priority": "high",
+                    "urgency": "high",
+                    "due_date": due,
+                }],
+                "filenames": [task1_name],
+            },
+        )
+        
+        # Create task with status="in-progress", priority="medium", urgency="medium"
+        mcp_client.call_tool(
+            "create_tasks",
+            {
+                "tasks": [{
+                    "title": "Multi-filter Task 2",
+                    "status": "in-progress",
+                    "priority": "medium",
+                    "urgency": "medium",
+                    "due_date": due,
+                }],
+                "filenames": [task2_name],
+            },
+        )
+        
+        # Create task with status="done", priority="low", urgency="low"
+        mcp_client.call_tool(
+            "create_tasks",
+            {
+                "tasks": [{
+                    "title": "Multi-filter Task 3",
+                    "status": "done",
+                    "priority": "low",
+                    "urgency": "low",
+                    "due_date": due,
+                }],
+                "filenames": [task3_name],
+            },
+        )
+    except ToolError as exc:
+        if "fast forward" in str(exc).lower():
+            pytest.skip("Branch protection or out-of-date ref prevents writes")
+        raise
+    
+    # Test filtering by multiple statuses
+    list_res = mcp_client.call_tool(
+        "list_tasks",
+        {
+            "status": ["open", "in-progress"],
+            "page_size": 100,
+        },
+    )
+    list_data = _unwrap(list_res)
+    listed = [
+        t for t in list_data["tasks"]
+        if t["filename"].endswith(task1_name) or t["filename"].endswith(task2_name)
+    ]
+    assert len(listed) >= 2, "Should find tasks with status 'open' or 'in-progress'"
+    
+    # Test filtering by multiple priorities
+    list_res = mcp_client.call_tool(
+        "list_tasks",
+        {
+            "priority": ["high", "medium"],
+            "page_size": 100,
+        },
+    )
+    list_data = _unwrap(list_res)
+    listed = [
+        t for t in list_data["tasks"]
+        if t["filename"].endswith(task1_name) or t["filename"].endswith(task2_name)
+    ]
+    assert len(listed) >= 2, "Should find tasks with priority 'high' or 'medium'"
+    
+    # Test filtering by multiple urgencies
+    list_res = mcp_client.call_tool(
+        "list_tasks",
+        {
+            "urgency": ["high", "medium"],
+            "page_size": 100,
+        },
+    )
+    list_data = _unwrap(list_res)
+    listed = [
+        t for t in list_data["tasks"]
+        if t["filename"].endswith(task1_name) or t["filename"].endswith(task2_name)
+    ]
+    assert len(listed) >= 2, "Should find tasks with urgency 'high' or 'medium'"
+    
+    # Test combined filters: multiple statuses AND multiple priorities
+    list_res = mcp_client.call_tool(
+        "list_tasks",
+        {
+            "status": ["open", "in-progress"],
+            "priority": ["high", "medium"],
+            "page_size": 100,
+        },
+    )
+    list_data = _unwrap(list_res)
+    listed = [
+        t for t in list_data["tasks"]
+        if t["filename"].endswith(task1_name) or t["filename"].endswith(task2_name)
+    ]
+    assert len(listed) >= 2, "Should find tasks matching both status and priority filters"
 
 
 def test_reminder_tools_happy_path(mcp_client: SyncMCPClient) -> None:
