@@ -109,9 +109,10 @@ Before publishing to the main PyPI, you can test on TestPyPI:
 2. **Merge develop to main before tagging** - Ensure all changes are in main
 3. **Test on TestPyPI first** (optional but recommended for major releases)
 4. **Use semantic versioning** (MAJOR.MINOR.PATCH)
-5. **Update CHANGELOG.md** with all changes before release
-6. **Test build locally** before pushing tags
-7. **Keep credentials secure** - use project-specific tokens
-8. **Test installation** from PyPI after publishing
-9. **Create GitHub Release** after successful publish
-10. **Monitor PyPI stats** and user feedback
+5. **Analyze changes** in repository between last release and current state
+6. **Update CHANGELOG.md** with all changes before release
+7. **Test build locally** before pushing tags
+8. **Keep credentials secure** - use project-specific tokens
+9. **Test installation** from PyPI after publishing
+10. **Create GitHub Release** after successful publish
+11. **Monitor PyPI stats** and user feedback
