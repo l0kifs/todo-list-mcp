@@ -16,6 +16,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - None yet
 
+## [0.2.0] - 2026-01-13
+
+### Changed
+- **BREAKING**: Migrated from GitHub-based storage to SQLite database for improved performance and simplified setup
+- Removed GitHub PAT requirement - no authentication needed anymore
+- Replaced `archive_tasks` tool with database-based task management
+- Updated `create_tasks`, `read_tasks`, `update_tasks`, and `list_tasks` to use task IDs instead of filenames
+- Simplified configuration - only database URL needed (optional, has sensible defaults)
+
+### Added
+- SQLAlchemy ORM models for tasks and reminders
+- SQLite client for database operations with transaction support
+- Database initialization and schema management
+
+### Removed
+- GitHub file client and all GitHub integration code
+- Dependency on GitHub repository for task storage
+- `archive_tasks` tool (replaced with database queries)
+
 ## [0.1.4] - 2026-01-12
 
 ### Changed

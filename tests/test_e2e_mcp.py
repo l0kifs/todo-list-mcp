@@ -8,14 +8,14 @@ the environment or .env; no skipping based on env checks here.
 
 from __future__ import annotations
 
-import os
 import json
+import os
 import uuid
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from fastmcp.exceptions import ToolError
 from dotenv import load_dotenv
+from fastmcp.exceptions import ToolError
 
 from tests.client import SyncMCPClient
 
@@ -25,10 +25,10 @@ pytestmark = pytest.mark.e2e
 @pytest.fixture(scope="module")
 def mcp_client():
     """Starts the MCP server via SyncMCPClient using current environment."""
-    
+
     # Load .env file if it exists
     load_dotenv()
-    
+
     server_path = os.path.abspath(__file__)
     with SyncMCPClient(server_path, env=dict(os.environ)) as client:
         yield client
@@ -76,15 +76,14 @@ def test_create_and_read_task(mcp_client: SyncMCPClient, unique_task_name: str) 
     payload = _base_payload(unique_task_name)
     result = mcp_client.call_tool(
         "create_tasks",
-        {"tasks": [payload], "filenames": [unique_task_name]},
+        {"tasks": [payload]},
     )
-    created_paths = _unwrap(result)["created"]
-    assert len(created_paths) == 1
-    assert created_paths[0].endswith(unique_task_name)
+    created_ids = _unwrap(result)["created"]
+    assert len(created_ids) == 1
+    assert isinstance(created_ids[0], int)
+    task_id = created_ids[0]
 
-    read_res = mcp_client.call_tool(
-        "read_tasks", {"filenames": [unique_task_name]}
-    )
+    read_res = mcp_client.call_tool("read_tasks", {"ids": [task_id]})
     read_data = _unwrap(read_res)
     assert read_data["tasks"][0]["task"]["title"] == payload["title"]
 
@@ -92,10 +91,11 @@ def test_create_and_read_task(mcp_client: SyncMCPClient, unique_task_name: str) 
 def test_update_task(mcp_client: SyncMCPClient, unique_task_name: str) -> None:
     payload = _base_payload(unique_task_name)
     try:
-        mcp_client.call_tool(
+        result = mcp_client.call_tool(
             "create_tasks",
-            {"tasks": [payload], "filenames": [unique_task_name]},
+            {"tasks": [payload]},
         )
+        task_id = _unwrap(result)["created"][0]
     except ToolError as exc:
         if "fast forward" in str(exc).lower():
             pytest.skip("Branch protection or out-of-date ref prevents writes")
@@ -106,7 +106,7 @@ def test_update_task(mcp_client: SyncMCPClient, unique_task_name: str) -> None:
         {
             "updates": [
                 {
-                    "filename": unique_task_name,
+                    "id": task_id,
                     "status": "done",
                     "priority": "high",
                     "urgency": "low",
@@ -117,11 +117,9 @@ def test_update_task(mcp_client: SyncMCPClient, unique_task_name: str) -> None:
         },
     )
     updated_data = _unwrap(updated)
-    assert any(path.endswith(unique_task_name) for path in updated_data["updated"])
+    assert task_id in updated_data["updated"]
 
-    read_res = mcp_client.call_tool(
-        "read_tasks", {"filenames": [unique_task_name]}
-    )
+    read_res = mcp_client.call_tool("read_tasks", {"ids": [task_id]})
     task = _unwrap(read_res)["tasks"][0]["task"]
     assert task["status"] == "done"
     assert task["priority"] == "high"
@@ -133,10 +131,11 @@ def test_list_filters_and_sort(
     mcp_client: SyncMCPClient, unique_task_name: str
 ) -> None:
     payload = _base_payload(unique_task_name)
-    mcp_client.call_tool(
+    result = mcp_client.call_tool(
         "create_tasks",
-        {"tasks": [payload], "filenames": [unique_task_name]},
+        {"tasks": [payload]},
     )
+    task_id = _unwrap(result)["created"][0]
 
     list_res = mcp_client.call_tool(
         "list_tasks",
@@ -148,107 +147,73 @@ def test_list_filters_and_sort(
         },
     )
     list_data = _unwrap(list_res)
-    listed = [t for t in list_data["tasks"] if t["filename"].endswith(unique_task_name)]
+    listed = [t for t in list_data["tasks"] if t["id"] == task_id]
     assert listed, "Task not found in list"
     assert listed[0]["task"]["title"] == payload["title"]
-
-
-def test_archive_task(mcp_client: SyncMCPClient, unique_task_name: str) -> None:
-    payload = _base_payload(unique_task_name)
-    try:
-        mcp_client.call_tool(
-            "create_tasks",
-            {"tasks": [payload], "filenames": [unique_task_name]},
-        )
-    except ToolError as exc:
-        msg = str(exc)
-        if "fast forward" in msg.lower():
-            pytest.skip("Branch protection or out-of-date ref prevents writes")
-        raise
-
-    arch_res = mcp_client.call_tool(
-        "archive_tasks", {"filenames": [unique_task_name]}
-    )
-    arch_data = _unwrap(arch_res)
-    assert any(path.endswith(unique_task_name) for path in arch_data["archived"])
-
-    list_after = mcp_client.call_tool(
-        "list_tasks",
-        {
-            "status": ["open"],
-            "include_description": False,
-            "page": 1,
-            "page_size": 100,
-        },
-    )
-    after_data = _unwrap(list_after)
-    listed_after = [
-        t for t in after_data["tasks"] if t["filename"].endswith(unique_task_name)
-    ]
-    assert not listed_after
 
 
 def test_list_multiple_filters(
     mcp_client: SyncMCPClient, unique_task_name: str
 ) -> None:
     """Test filtering with multiple statuses, priorities, and urgencies."""
-    # Create tasks with different statuses, priorities, and urgencies
-    task1_name = f"e2e-multi-1-{uuid.uuid4().hex[:8]}.yaml"
-    task2_name = f"e2e-multi-2-{uuid.uuid4().hex[:8]}.yaml"
-    task3_name = f"e2e-multi-3-{uuid.uuid4().hex[:8]}.yaml"
-    
     due = (datetime.now(tz=UTC) + timedelta(days=2)).isoformat()
-    
+
     try:
         # Create task with status="open", priority="high", urgency="high"
-        mcp_client.call_tool(
+        result1 = mcp_client.call_tool(
             "create_tasks",
             {
-                "tasks": [{
-                    "title": "Multi-filter Task 1",
-                    "status": "open",
-                    "priority": "high",
-                    "urgency": "high",
-                    "due_date": due,
-                }],
-                "filenames": [task1_name],
+                "tasks": [
+                    {
+                        "title": "Multi-filter Task 1",
+                        "status": "open",
+                        "priority": "high",
+                        "urgency": "high",
+                        "due_date": due,
+                    }
+                ],
             },
         )
-        
+        task1_id = _unwrap(result1)["created"][0]
+
         # Create task with status="in-progress", priority="medium", urgency="medium"
-        mcp_client.call_tool(
+        result2 = mcp_client.call_tool(
             "create_tasks",
             {
-                "tasks": [{
-                    "title": "Multi-filter Task 2",
-                    "status": "in-progress",
-                    "priority": "medium",
-                    "urgency": "medium",
-                    "due_date": due,
-                }],
-                "filenames": [task2_name],
+                "tasks": [
+                    {
+                        "title": "Multi-filter Task 2",
+                        "status": "in-progress",
+                        "priority": "medium",
+                        "urgency": "medium",
+                        "due_date": due,
+                    }
+                ],
             },
         )
-        
+        task2_id = _unwrap(result2)["created"][0]
+
         # Create task with status="done", priority="low", urgency="low"
-        mcp_client.call_tool(
+        result3 = mcp_client.call_tool(
             "create_tasks",
             {
-                "tasks": [{
-                    "title": "Multi-filter Task 3",
-                    "status": "done",
-                    "priority": "low",
-                    "urgency": "low",
-                    "due_date": due,
-                }],
-                "filenames": [task3_name],
+                "tasks": [
+                    {
+                        "title": "Multi-filter Task 3",
+                        "status": "done",
+                        "priority": "low",
+                        "urgency": "low",
+                        "due_date": due,
+                    }
+                ],
             },
         )
+        task3_id = _unwrap(result3)["created"][0]
     except ToolError as exc:
         if "fast forward" in str(exc).lower():
             pytest.skip("Branch protection or out-of-date ref prevents writes")
         raise
-    
+
     # Test filtering by multiple statuses
     list_res = mcp_client.call_tool(
         "list_tasks",
@@ -258,12 +223,9 @@ def test_list_multiple_filters(
         },
     )
     list_data = _unwrap(list_res)
-    listed = [
-        t for t in list_data["tasks"]
-        if t["filename"].endswith(task1_name) or t["filename"].endswith(task2_name)
-    ]
+    listed = [t for t in list_data["tasks"] if t["id"] in [task1_id, task2_id]]
     assert len(listed) >= 2, "Should find tasks with status 'open' or 'in-progress'"
-    
+
     # Test filtering by multiple priorities
     list_res = mcp_client.call_tool(
         "list_tasks",
@@ -273,12 +235,9 @@ def test_list_multiple_filters(
         },
     )
     list_data = _unwrap(list_res)
-    listed = [
-        t for t in list_data["tasks"]
-        if t["filename"].endswith(task1_name) or t["filename"].endswith(task2_name)
-    ]
+    listed = [t for t in list_data["tasks"] if t["id"] in [task1_id, task2_id]]
     assert len(listed) >= 2, "Should find tasks with priority 'high' or 'medium'"
-    
+
     # Test filtering by multiple urgencies
     list_res = mcp_client.call_tool(
         "list_tasks",
@@ -288,12 +247,9 @@ def test_list_multiple_filters(
         },
     )
     list_data = _unwrap(list_res)
-    listed = [
-        t for t in list_data["tasks"]
-        if t["filename"].endswith(task1_name) or t["filename"].endswith(task2_name)
-    ]
+    listed = [t for t in list_data["tasks"] if t["id"] in [task1_id, task2_id]]
     assert len(listed) >= 2, "Should find tasks with urgency 'high' or 'medium'"
-    
+
     # Test combined filters: multiple statuses AND multiple priorities
     list_res = mcp_client.call_tool(
         "list_tasks",
@@ -304,11 +260,10 @@ def test_list_multiple_filters(
         },
     )
     list_data = _unwrap(list_res)
-    listed = [
-        t for t in list_data["tasks"]
-        if t["filename"].endswith(task1_name) or t["filename"].endswith(task2_name)
-    ]
-    assert len(listed) >= 2, "Should find tasks matching both status and priority filters"
+    listed = [t for t in list_data["tasks"] if t["id"] in [task1_id, task2_id]]
+    assert len(listed) >= 2, (
+        "Should find tasks matching both status and priority filters"
+    )
 
 
 def test_reminder_tools_happy_path(mcp_client: SyncMCPClient) -> None:
@@ -338,9 +293,7 @@ def test_reminder_tools_happy_path(mcp_client: SyncMCPClient) -> None:
     assert list_data["status"] == "success"
     assert reminder_id in list_data["output"]
 
-    remove_res = mcp_client.call_tool(
-        "remove_reminders", {"ids": [reminder_id]}
-    )
+    remove_res = mcp_client.call_tool("remove_reminders", {"ids": [reminder_id]})
     remove_data = _unwrap(remove_res)
     assert remove_data["status"] == "success"
 

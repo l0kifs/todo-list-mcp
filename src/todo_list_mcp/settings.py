@@ -3,9 +3,9 @@ from pathlib import Path
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from todo_list_mcp.github_file_client import GitHubFileClientSettings
-
-APP_NAME = "todo-list-mcp"  # Application name constant. Should be in format "kebab-case".
+APP_NAME = (
+    "todo-list-mcp"  # Application name constant. Should be in format "kebab-case".
+)
 
 
 class Settings(BaseSettings):
@@ -20,15 +20,16 @@ class Settings(BaseSettings):
 
     # Application settings
     app_name: str = Field(default=APP_NAME, description="Application name")
-    app_version: str = Field(default="0.1.4", description="Application version")
+    app_version: str = Field(default="0.2.0", description="Application version")
     app_data_dir: str = Field(
         default=Path.home().joinpath(f".{APP_NAME}").as_posix(),
         description="Data directory path",
     )
 
-    github_file_client_settings: GitHubFileClientSettings = Field(
-        default_factory=lambda: GitHubFileClientSettings(),  # type: ignore
-        description="Settings for GitHub file client",
+    # SQLite database settings
+    database_url: str = Field(
+        default_factory=lambda: f"sqlite:///{Path.home().joinpath(f'.{APP_NAME}', 'todo_list.db').as_posix()}",
+        description="SQLite database URL (e.g., sqlite:///path/to/db.sqlite)",
     )
 
     # Logging settings
@@ -39,9 +40,7 @@ class Settings(BaseSettings):
         default="<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | <level>{level: <8}</level> | <cyan>{module}</cyan>:<cyan>{line}</cyan> - <level>{message}</level> | {extra}",
         description="Logging format string",
     )
-    logging_rotation: str = Field(
-        default="10 MB", description="Log file rotation size"
-    )
+    logging_rotation: str = Field(default="10 MB", description="Log file rotation size")
     logging_retention: str = Field(
         default="10 days", description="Log file retention period"
     )

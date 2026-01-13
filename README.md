@@ -12,7 +12,7 @@
 </div>
 
 A Model Context Protocol (MCP) server that provides:
-- **Todo List Management**: Persistent todo list with GitHub integration
+- **Todo List Management**: Persistent todo list with SQLite database storage
 - **Reminder Service**: Desktop notifications with optional sound alerts
 - **Cross-platform Sound System**: Sound playback on Windows, macOS, and Linux
 
@@ -20,14 +20,17 @@ A Model Context Protocol (MCP) server that provides:
 
 ### Prerequisites
 - [UV](https://docs.astral.sh/uv/) installed
-- A GitHub Personal Access Token (PAT) with `repo` scope
+- Python 3.11 or higher
 
 ### Configuration
-Create a `.env` file in ``~/.todo-list-mcp/`` with the following content:
+The application stores data in `~/.todo-list-mcp/` directory:
+- `todo_list.db` - SQLite database for tasks
+- `reminder_daemon/` - Reminder daemon data
+
+No additional configuration is required unless you want to customize the database location.
+You can optionally create a `.env` file in `~/.todo-list-mcp/` with:
 ```env
-TODO_LIST_MCP__GITHUB_FILE_CLIENT_SETTINGS__OWNER=your_username
-TODO_LIST_MCP__GITHUB_FILE_CLIENT_SETTINGS__REPO=your_repo_name
-TODO_LIST_MCP__GITHUB_FILE_CLIENT_SETTINGS__TOKEN=ghp_your_token_here
+TODO_LIST_MCP__DATABASE_URL=sqlite:///path/to/custom/location.db
 ```
 
 ### VSCode IDE Setup
@@ -39,18 +42,18 @@ Enter the following details in your `mcp.json` configuration file:
     "command": "uvx",
     "args": [
         "todo-list-mcp@latest"
-    ],
-    "envFile": "path/to/user/home/.todo-list-mcp/.env"
-},
+    ]
+}
 ```
 
 ## Features
 
 ### Todo List Management (MCP)
-- **GitHub Integration**: Store tasks as YAML files in a GitHub repository `tasks/` directory
+- **SQLite Storage**: Store tasks in a local SQLite database for fast, reliable access
 - **Flexible Attributes**: Track title, description, status, priority, urgency, time estimates, due dates, tags, and assignees
 - **Smart Filtering**: Query tasks by status, priority, tags, assignee, or due date
 - **Lifecycle Management**: Create, read, update, and archive tasks directly via MCP tools
+- **Archiving**: Archive completed tasks while preserving all data for future reference
 
 ### Reminder System
 - **Cross-Platform**: Native visual dialogs for Windows, macOS, and Linux
