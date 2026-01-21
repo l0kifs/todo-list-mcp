@@ -279,7 +279,7 @@ class ReminderClient:
             style |= wx.STAY_ON_TOP
 
         frame = wx.Frame(None, wx.ID_ANY, reminder.title, style=style)
-        
+
         # Create a panel for better cross-platform look
         panel = wx.Panel(frame)
         
@@ -400,10 +400,10 @@ class ReminderClient:
             event_name,
             {
                 "id": reminder_id,
-                "title": reminder.title if reminder else None,
-                "message": reminder.message if reminder else None,
-                "created_at": reminder.created_at if reminder else None,
-                "updated_at": reminder.updated_at if reminder else None,
+                "title": reminder.title,
+                "message": reminder.message,
+                "created_at": reminder.created_at,
+                "updated_at": reminder.updated_at,
                 "source": source,
             },
         )
