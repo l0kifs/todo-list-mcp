@@ -23,7 +23,7 @@ from rich.console import Console
 from rich.table import Table
 
 from todo_list_mcp.logging_config import setup_logging
-from todo_list_mcp.reminder_client import ReminderClient
+from todo_list_mcp.wxpython_reminder_client import ReminderClient
 from todo_list_mcp.settings import get_settings
 from todo_list_mcp.sound_client import SoundClient
 

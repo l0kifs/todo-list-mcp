@@ -49,6 +49,9 @@ dependencies = [
     # Logging and configuration
     "loguru>=0.7.3",
     "pydantic-settings>=2.12.0",
+
+    # GUI for reminders
+    "wxPython>=4.2.0",
 ]
 
 [tool.uv]
