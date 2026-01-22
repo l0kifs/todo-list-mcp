@@ -16,6 +16,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - None yet
 
+## [0.3.0] - 2026-01-22
+
+### Added
+- wxPython-based reminder client for improved cross-platform desktop notifications
+- macOS-specific threading and UI handling for wxPython client
+
+### Changed
+- Replaced Tkinter with wxPython in reminder CLI daemon for better stability
+- Improved reminder CLI daemon to run wxPython on main thread on macOS
+- Enhanced AI assistant prompt documentation with better task filtering examples and time awareness
+
+### Fixed
+- Cross-platform compatibility issues with reminder dialogs
+
 ## [0.2.0] - 2026-01-13
 
 ### Changed
@@ -77,7 +91,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Background daemon for reminder notifications
 - Support for Windows, macOS, and Linux
 
-[Unreleased]: https://github.com/l0kifs/todo-list-mcp/compare/v0.1.4...HEAD
+[Unreleased]: https://github.com/l0kifs/todo-list-mcp/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/l0kifs/todo-list-mcp/releases/tag/v0.3.0
+[0.2.0]: https://github.com/l0kifs/todo-list-mcp/releases/tag/v0.2.0
 [0.1.4]: https://github.com/l0kifs/todo-list-mcp/releases/tag/v0.1.4
 [0.1.3]: https://github.com/l0kifs/todo-list-mcp/releases/tag/v0.1.3
 [0.1.2]: https://github.com/l0kifs/todo-list-mcp/releases/tag/v0.1.2

@@ -20,7 +20,7 @@ class Settings(BaseSettings):
 
     # Application settings
     app_name: str = Field(default=APP_NAME, description="Application name")
-    app_version: str = Field(default="0.2.0", description="Application version")
+    app_version: str = Field(default="0.3.0", description="Application version")
     app_data_dir: str = Field(
         default=Path.home().joinpath(f".{APP_NAME}").as_posix(),
         description="Data directory path",
