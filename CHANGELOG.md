@@ -16,6 +16,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - None yet
 
+## [0.3.1] - 2026-01-22
+
+### Added
+- `delete_tasks` MCP tool for permanently removing tasks by ID
+- Support for batch deletion with multiple task IDs
+- Comprehensive e2e test for delete functionality
+
 ## [0.3.0] - 2026-01-22
 
 ### Added
