@@ -365,6 +365,48 @@ def update_tasks(
 
 
 @app.tool()
+def delete_tasks(
+    ids: Annotated[
+        List[int],
+        "List of task IDs to delete (e.g., [1, 2, 3]). Tasks are permanently removed from the database.",
+    ],
+) -> dict:
+    """Delete one or more tasks from the SQLite database by ID.
+
+    Tasks are permanently removed from the database. This operation cannot be undone.
+    Use this to remove tasks that are no longer needed.
+
+    Example: Delete single task:
+    ids=[1]
+
+    Example: Delete multiple tasks:
+    ids=[1, 2, 3]
+    """
+    deleted_ids: List[int] = []
+    not_found_ids: List[int] = []
+
+    with db_client.transaction() as session:
+        for task_id in ids:
+            task = db_client.get_by_id(session, Task, task_id)
+            if task:
+                db_client.delete(session, task)
+                deleted_ids.append(task_id)
+                logger.info("Deleted task", task_id=task_id, title=task.title)
+            else:
+                not_found_ids.append(task_id)
+                logger.warning(f"Task not found: {task_id}")
+
+    result = {
+        "deleted": deleted_ids,
+        "count": len(deleted_ids),
+    }
+    if not_found_ids:
+        result["not_found"] = not_found_ids
+
+    return result
+
+
+@app.tool()
 def list_tasks(
     status: Annotated[
         Optional[list[Literal["open", "in-progress", "done"]]],

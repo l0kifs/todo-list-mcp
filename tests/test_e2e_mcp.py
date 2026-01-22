@@ -127,6 +127,49 @@ def test_update_task(mcp_client: SyncMCPClient, unique_task_name: str) -> None:
     assert task["time_estimate"] == 1.0
 
 
+def test_delete_tasks(mcp_client: SyncMCPClient, unique_task_name: str) -> None:
+    """Test deleting single and multiple tasks."""
+    payload1 = _base_payload(unique_task_name + "-1")
+    payload2 = _base_payload(unique_task_name + "-2")
+    
+    # Create two tasks
+    result = mcp_client.call_tool(
+        "create_tasks",
+        {"tasks": [payload1, payload2]},
+    )
+    created_ids = _unwrap(result)["created"]
+    assert len(created_ids) == 2
+    task_id_1, task_id_2 = created_ids[0], created_ids[1]
+
+    # Delete first task
+    delete_res = mcp_client.call_tool("delete_tasks", {"ids": [task_id_1]})
+    delete_data = _unwrap(delete_res)
+    assert task_id_1 in delete_data["deleted"]
+    assert delete_data["count"] == 1
+
+    # Verify first task is deleted
+    read_res = mcp_client.call_tool("read_tasks", {"ids": [task_id_1]})
+    read_data = _unwrap(read_res)
+    assert len(read_data["tasks"]) == 0
+
+    # Verify second task still exists
+    read_res2 = mcp_client.call_tool("read_tasks", {"ids": [task_id_2]})
+    read_data2 = _unwrap(read_res2)
+    assert len(read_data2["tasks"]) == 1
+    assert read_data2["tasks"][0]["id"] == task_id_2
+
+    # Delete second task
+    delete_res2 = mcp_client.call_tool("delete_tasks", {"ids": [task_id_2]})
+    delete_data2 = _unwrap(delete_res2)
+    assert task_id_2 in delete_data2["deleted"]
+
+    # Try to delete non-existent task
+    delete_res3 = mcp_client.call_tool("delete_tasks", {"ids": [99999]})
+    delete_data3 = _unwrap(delete_res3)
+    assert delete_data3["count"] == 0
+    assert 99999 in delete_data3["not_found"]
+
+
 def test_list_filters_and_sort(
     mcp_client: SyncMCPClient, unique_task_name: str
 ) -> None:
