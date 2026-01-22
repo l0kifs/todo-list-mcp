@@ -361,6 +361,9 @@ def status() -> None:
 @app.command()
 def daemon() -> None:
     """Run the reminder daemon (persistent mode)."""
+    import platform
+    import os
+    
     # Check if daemon is already running
     if _is_daemon_running():
         console.print("[yellow]Daemon is already running![/yellow]")
@@ -375,8 +378,7 @@ def daemon() -> None:
 
     store = ReminderStore()
     daemon_instance = ReminderDaemon(store)
-    daemon_instance.start()
-
+    
     # Handle clean shutdown
     def signal_handler(sig, frame):
         console.print("\n[yellow]Shutting down...[/yellow]")
@@ -387,12 +389,25 @@ def daemon() -> None:
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
 
-    # Keep running
-    try:
-        while True:
-            time.sleep(1)
-    except KeyboardInterrupt:
-        signal_handler(None, None)
+    # On macOS, wxPython must run on the main thread
+    if platform.system() == "Darwin":
+        logger.info("macOS detected - running wxPython on main thread")
+        daemon_instance.start()
+        # Run the wxPython event loop on the main thread
+        if daemon_instance._reminder_client:
+            try:
+                daemon_instance._reminder_client.start_ui()
+            except KeyboardInterrupt:
+                signal_handler(None, None)
+    else:
+        # On other platforms, we can run everything in background threads
+        daemon_instance.start()
+        # Keep running
+        try:
+            while True:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            signal_handler(None, None)
 
 
 if __name__ == "__main__":

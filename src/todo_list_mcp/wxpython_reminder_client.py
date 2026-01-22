@@ -5,14 +5,14 @@ simple reminder dialogs on Windows, macOS, and Linux. It runs a hidden wx.App
 in a background thread and marshals all UI work onto that thread.
 """
 
-from __future__ import annotations
-
 import queue
 import threading
 import time
 import uuid
 from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional
+
+import platform
 
 try:
     import wx
@@ -45,6 +45,7 @@ class ReminderClient:
         self._event_queue: "queue.Queue[tuple[str, dict] | None]" = queue.Queue()
         self._event_listeners: List[Callable[[str, dict], None]] = []
         self._event_listeners_lock = threading.Lock()
+        self._platform = platform.system()
         self._ui_thread = threading.Thread(
             target=self._run_ui, name="ReminderUI", daemon=True
         )
@@ -55,18 +56,23 @@ class ReminderClient:
             "Starting ReminderClient UI thread",
             extra={"component": "reminder_ui", "poll_interval_ms": poll_interval_ms},
         )
-        self._ui_thread.start()
         self._event_thread.start()
-        if not self._ready.wait(timeout=5):
-            logger.error(
-                "Reminder UI thread failed to start",
-                extra={"component": "reminder_ui", "timeout": 5},
-            )
-            raise RuntimeError("wxPython UI thread did not start")
+        if self._platform != "Darwin":
+            self._ui_thread.start()
+            if not self._ready.wait(timeout=5):
+                logger.error(
+                    "Reminder UI thread failed to start",
+                    extra={"component": "reminder_ui", "timeout": 5},
+                )
+                raise RuntimeError("wxPython UI thread did not start")
         logger.info(
             "ReminderClient initialized",
             extra={"component": "reminder_ui", "poll_interval_ms": poll_interval_ms},
         )
+
+    def start_ui(self) -> None:
+        if self._platform == "Darwin":
+            self._run_ui()
 
     def create_reminder(
         self,
@@ -180,12 +186,13 @@ class ReminderClient:
             except Exception:
                 pass
         self._event_queue.put(None)
-        self._ui_thread.join(timeout=5)
-        if self._ui_thread.is_alive():
-            logger.warning(
-                "Reminder UI thread did not exit cleanly",
-                extra={"component": "reminder_ui", "action": "shutdown"},
-            )
+        if self._platform != "Darwin" and self._ui_thread.is_alive():
+            self._ui_thread.join(timeout=5)
+            if self._ui_thread.is_alive():
+                logger.warning(
+                    "Reminder UI thread did not exit cleanly",
+                    extra={"component": "reminder_ui", "action": "shutdown"},
+                )
         self._event_thread.join(timeout=2)
         if self._event_thread.is_alive():
             logger.warning(
@@ -311,16 +318,24 @@ class ReminderClient:
         # Bind close event
         frame.Bind(wx.EVT_CLOSE, lambda evt, rid=reminder.reminder_id: self._on_close(evt, rid))
         
-        # Set size if specified
+        # Finalize layout before calculating size
+        panel.Layout()
+        sizer.Fit(panel)
+        
+        # Set size if specified, otherwise use calculated best size
         if width_px is not None or height_px is not None:
-            # Get the best size first
-            frame.Layout()
-            best_size = frame.GetBestSize()
+            best_size = panel.GetBestSize()
             target_w = width_px if width_px is not None else best_size.GetWidth()
             target_h = height_px if height_px is not None else best_size.GetHeight()
-            frame.SetSize(max(1, int(target_w)), max(1, int(target_h)))
+            # Add some padding for frame decorations
+            frame.SetClientSize(max(200, int(target_w)), max(100, int(target_h)))
         else:
-            frame.SetSize(frame.GetBestSize())
+            # Use panel's best size with minimum dimensions
+            best_size = panel.GetBestSize()
+            frame.SetClientSize(max(300, best_size.GetWidth()), max(120, best_size.GetHeight()))
+        
+        # Center the frame on screen
+        frame.Centre()
         
         # Show the frame
         frame.Show(True)
@@ -468,34 +483,42 @@ if __name__ == "__main__":
         level="DEBUG",
     )
 
+    def demo(client):
+        def on_event(event: str, payload: dict) -> None:
+            print(f"EVENT {event}: {payload}")
+
+        unsubscribe = client.add_event_listener(on_event)
+        reminder_id = client.create_reminder(
+            "Stretch",
+            "Stand up and stretch your legs.",
+            topmost=True,
+            width_px=420,
+            height_px=220,
+            font_size=14,
+        )
+        print("Created reminder", reminder_id)
+        time.sleep(2)
+
+        client.update_reminder(reminder_id, message="Time to stretch now.")
+        print("Updated reminder message")
+        time.sleep(5)
+        print("Current reminders:", client.list_reminders())
+        time.sleep(3)
+
+        client.delete_reminder(reminder_id)
+        print("Deleted reminder")
+        time.sleep(1)
+
+        unsubscribe()
+
+        client.shutdown()
+        print("Shutdown complete")
+
     client = ReminderClient()
 
-    def on_event(event: str, payload: dict) -> None:
-        print(f"EVENT {event}: {payload}")
-
-    unsubscribe = client.add_event_listener(on_event)
-    reminder_id = client.create_reminder(
-        "Stretch",
-        "Stand up and stretch your legs.",
-        topmost=True,
-        width_px=420,
-        height_px=220,
-        font_size=14,
-    )
-    print("Created reminder", reminder_id)
-    time.sleep(2)
-
-    client.update_reminder(reminder_id, message="Time to stretch now.")
-    print("Updated reminder message")
-    time.sleep(5)
-    print("Current reminders:", client.list_reminders())
-    time.sleep(3)
-
-    client.delete_reminder(reminder_id)
-    print("Deleted reminder")
-    time.sleep(1)
-
-    unsubscribe()
-
-    client.shutdown()
-    print("Shutdown complete")
+    if platform.system() == "Darwin":
+        demo_thread = threading.Thread(target=demo, args=(client,))
+        demo_thread.start()
+        client.start_ui()
+    else:
+        demo(client)
